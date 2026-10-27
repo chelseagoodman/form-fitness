@@ -99,12 +99,33 @@ window.formMoveExercise=function(index,direction){
  openCards=new Set([target]);replaceDraft(reordered);
 };
 
-const oldStart=startSession;
-startSession=function(id){
- const stored=localStorage.getItem(DRAFT_KEY);
- if(stored){if(!confirm('You have an unfinished workout. Press OK to resume it, or Cancel to keep it without starting another.'))return;try{const data=JSON.parse(stored);sessionDraft=data.draft;done=data.done||[];openCards=new Set([0]);editSession();return}catch{localStorage.removeItem(DRAFT_KEY)}}
- oldStart(id);done=sessionDraft?.sets.map(()=>false)||[];openCards=new Set([0]);persist();
+
+const oldStart = startSession;
+
+startSession = function(id) {
+  const stored = localStorage.getItem(DRAFT_KEY);
+
+  if (stored) {
+    if (!confirm(
+      'You have an unfinished workout. Press OK to resume it, or Cancel to keep it without starting another.'
+    )) return;
+
+    formResumeDraft();
+    return;
+  }
+
+  // Open the workout window before rendering the cards.
+  modal('<h2>Loading workout...</h2>');
+
+  oldStart(id);
+
+  done = sessionDraft?.sets.map(() => false) || [];
+  openCards = new Set([0]);
+
+  persist();
+  renderWorkout();
 };
+
 editSession=function(){renderWorkout();persist()};
 finishSession=function(){
  if(!sessionDraft)return;
