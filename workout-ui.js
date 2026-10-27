@@ -18,7 +18,7 @@ function exerciseGroups(){
   g.sets.push(s);
  }
  const routine=db.routines.find(r=>r.id===sessionDraft.routineId);
- groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=e?.style||'straight';g.superset=e?.supersetGroup||null;g.reps=e?.reps||10;});
+ groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=pairOf(g.name)?'superset':e?.style||'straight';g.superset=pairOf(g.name)||e?.supersetGroup||null;g.reps=e?.reps||10;});
  return groups;
 }
 function indexFor(s){return sessionDraft.sets.indexOf(s)}
@@ -27,6 +27,43 @@ function lastSet(name,n){
  for(const sess of sessions){const found=sess.sets.find(x=>x.exercise===name&&x.set===n);if(found)return `${found.weight}kg × ${found.reps}`}
  return '—';
 }
+// FORM 1.9: Session-local superset pairings, stored with draft and completed session.
+function pairOf(name){return sessionDraft?.supersets?.[name]||null}
+function nextPairLabel(){const used=new Set(Object.values(sessionDraft.supersets||{}));for(const x of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')if(!used.has(x))return x;return 'Z'}
+function formPopulateTargets(){
+ if(!sessionDraft)return;
+ for(const set of sessionDraft.sets){
+  const sessions=[...db.sessions].filter(s=>s.sets?.some(x=>x.exercise===set.exercise)).sort((a,b)=>b.date.localeCompare(a.date));
+  const last=sessions[0]?.sets?.find(x=>x.exercise===set.exercise&&x.set===set.set);
+  if(!last)continue;
+  // Never infer a load from zero: it may represent an unrecorded value.
+  if(Number(last.weight)>0)set.weight=Number(last.weight);
+  const target=sessionDraft.routineId&&db.routines.find(r=>r.id===sessionDraft.routineId)?.exercises.find(e=>e.name===set.exercise)?.reps;
+  const cap=Math.max(Number(target)||10,Number(last.reps)||0)+2;
+  set.reps=Math.min(cap,Math.max(1,Number(last.reps)||Number(target)||10)+1);
+ }
+}
+window.formPairExercise=function(index){
+ const groups=exerciseGroups(),source=groups[index];if(!source)return;
+ const choices=groups.filter(g=>g.name!==source.name).map(g=>g.name);
+ if(!choices.length)return alert('Add another exercise to create a superset.');
+ $('modalContent').innerHTML=`<h2>Create superset</h2><p class="muted">Pair ${safeText(source.name)} with another exercise. Your completed sets and history remain unchanged.</p><label>Pair with</label><select id="formPairTarget">${choices.map(n=>`<option value="${safeText(n)}">${safeText(n)}</option>`).join('')}</select><div class="actions"><button class="button" onclick="formConfirmPair(${index})">Create superset</button><button class="button secondary" onclick="editSession()">Cancel</button></div>`;
+};
+window.formConfirmPair=function(index){
+ const source=exerciseGroups()[index]?.name,target=$('formPairTarget')?.value;if(!source||!target)return;
+ sessionDraft.supersets=sessionDraft.supersets||{};
+ const label=nextPairLabel();
+ // Remove old pairings for the two exercises; leave unrelated pairs alone.
+ const old=new Set([sessionDraft.supersets[source],sessionDraft.supersets[target]].filter(Boolean));
+ for(const [n,v] of Object.entries(sessionDraft.supersets))if(old.has(v))delete sessionDraft.supersets[n];
+ sessionDraft.supersets[source]=label;sessionDraft.supersets[target]=label;
+ persist();editSession();
+};
+window.formUnpairExercise=function(index){
+ const name=exerciseGroups()[index]?.name,label=pairOf(name);if(!label)return;
+ for(const [n,v] of Object.entries(sessionDraft.supersets))if(v===label)delete sessionDraft.supersets[n];
+ persist();renderWorkout();
+};
 function renderWorkout(){
  if(!sessionDraft)return;
  const groups=exerciseGroups();
@@ -34,7 +71,7 @@ function renderWorkout(){
  const html=`<h2>${safeText(sessionDraft.name)}</h2><p class="muted tiny">${completed} / ${total} sets completed · Changes saved on this device as you type.</p>
  <div class="progress" style="margin-bottom:16px"><div style="width:${total?100*completed/total:0}%"></div></div>
  ${groups.map((g,i)=>`<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${i})" aria-expanded="${openCards.has(i)}"><span><span class="tiny muted">${g.style==='superset'?'SUPERSET '+safeText(g.superset||''): 'STRAIGHT SETS'}</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(i)?'−':'+'}</span></button>
- <div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${i})">Swap</button><button class="button secondary small" onclick="formMoveExercise(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${i},1)" ${i===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${i})">Remove</button></div>
+ <div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${i})">Swap</button><button class="button secondary small" onclick="formPairExercise(${i})">Pair</button>${pairOf(g.name)?`<button class="button secondary small" onclick="formUnpairExercise(${i})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${i},1)" ${i===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${i})">Remove</button></div>
  ${openCards.has(i)?`<div class="workout-set-grid workout-set-head"><span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>Done</span></div>${g.sets.map(s=>{let k=indexFor(s);return `<div class="workout-set-grid"><span>${s.set}</span><span class="tiny muted">${lastSet(g.name,s.set)}</span><input aria-label="Weight set ${s.set}" type="number" min="0" step="0.5" value="${Number(s.weight)||0}" oninput="formDraftValue(${k},'weight',this.value)"><input aria-label="Reps set ${s.set}" type="number" min="0" step="1" value="${Number(s.reps)||0}" oninput="formDraftValue(${k},'reps',this.value)"><input aria-label="Complete set ${s.set}" type="checkbox" ${done[k]?'checked':''} onchange="formDraftDone(${k},this.checked)"></div>`}).join('')}<p class="tiny muted">${g.style==='superset'?'Alternate with its paired accessory exercise; rest after the pair.':'Rest approximately 2–3 minutes after demanding compound sets.'}</p>`:''}</section>`).join('')}
  <div class="actions"><button class="button secondary" onclick="formAddDuringWorkout()">+ Add exercise</button><button class="button" onclick="finishSession()">Finish & save</button><button class="button secondary" onclick="formKeepDraft()">Save & close</button><button class="button danger" onclick="formDiscardDraft()">Discard draft</button></div>`;
  $('modalContent').innerHTML=html;
@@ -76,6 +113,7 @@ window.formConfirmSwap=function(index){
  const group=exerciseGroups()[index];if(!group||!replacement)return alert('Select a replacement exercise.');
  if(replacement.toLowerCase()===group.name.toLowerCase())return alert('Choose a different exercise.');
  if(sessionDraft.sets.some(x=>x.exercise.toLowerCase()===replacement.toLowerCase()))return alert('That exercise is already in this workout.');
+ if(!libraryNames().some(n=>n.toLowerCase()===replacement.toLowerCase())&&confirm('Add this new exercise to your library for future workouts?')){db.exerciseLibrary=db.exerciseLibrary||[];db.exerciseLibrary.push([replacement,'Other','Custom']);save();}
  const indices=groupIndices(index),entries=draftEntries();
  const pending=indices.filter(i=>!done[i]);
  if(!pending.length)return alert('All sets are complete. Add a new exercise instead.');
@@ -83,13 +121,13 @@ window.formConfirmSwap=function(index){
  let next=1;
  for(const i of pending){entries[i]={set:{...entries[i].set,exercise:replacement,set:next++,weight:0,reps:group.reps},done:false}}
  // Keep completed original sets and new replacement sets distinct in the session.
- openCards=new Set([index,index+1]);replaceDraft(entries);
+ if(sessionDraft.supersets)delete sessionDraft.supersets[group.name];openCards=new Set([index,index+1]);replaceDraft(entries);
 };
 window.formRemoveExercise=function(index){
  const group=exerciseGroups()[index];if(!group)return;
  const indices=groupIndices(index);if(indices.some(i=>done[i]))return alert('This exercise has completed sets. Keep them in your history, or swap only unfinished sets.');
  if(!confirm(`Remove ${group.name} from this workout?`))return;
- const remove=new Set(indices);replaceDraft(draftEntries().filter((_,i)=>!remove.has(i)));
+ if(sessionDraft.supersets)delete sessionDraft.supersets[group.name];const remove=new Set(indices);replaceDraft(draftEntries().filter((_,i)=>!remove.has(i)));
 };
 window.formMoveExercise=function(index,direction){
  const groups=exerciseGroups(),target=index+direction;if(target<0||target>=groups.length)return;
@@ -99,38 +137,22 @@ window.formMoveExercise=function(index,direction){
  openCards=new Set([target]);replaceDraft(reordered);
 };
 
-
-const oldStart = startSession;
-
-startSession = function(id) {
-  const stored = localStorage.getItem(DRAFT_KEY);
-
-  if (stored) {
-    if (!confirm(
-      'You have an unfinished workout. Press OK to resume it, or Cancel to keep it without starting another.'
-    )) return;
-
-    formResumeDraft();
-    return;
-  }
-
-  // Open the workout window before rendering the cards.
-  modal('<h2>Loading workout...</h2>');
-
-  oldStart(id);
-
-  done = sessionDraft?.sets.map(() => false) || [];
-  openCards = new Set([0]);
-
-  persist();
-  renderWorkout();
+const oldStart=startSession;
+startSession=function(id){
+ const stored=localStorage.getItem(DRAFT_KEY);
+ if(stored){if(!confirm('An unfinished workout exists. OK to resume it; Cancel to keep it.'))return;formResumeDraft();return}
+ modal('<h2>Loading workout...</h2>');
+ oldStart(id);
+ if(!sessionDraft){close();return}
+ done=sessionDraft.sets.map(()=>false);openCards=new Set([0]);
+ sessionDraft.supersets=sessionDraft.supersets||{};
+ formPopulateTargets();persist();renderWorkout();
 };
-
 editSession=function(){renderWorkout();persist()};
 finishSession=function(){
  if(!sessionDraft)return;
  if(!confirm('Finish and save this workout? All entered sets will be recorded.'))return;
- db.sessions.push({id:uid(),date:TODAY(),name:sessionDraft.name,sets:sessionDraft.sets.map(s=>({...s,reps:Math.max(0,Number(s.reps)||0),weight:Math.max(0,Number(s.weight)||0)}))});
+ db.sessions.push({id:uid(),date:TODAY(),name:sessionDraft.name,supersets:sessionDraft.supersets||{},sets:sessionDraft.sets.map(s=>({...s,reps:Math.max(0,Number(s.reps)||0),weight:Math.max(0,Number(s.weight)||0)}))});
  if(save()){clearDraft();close();render()}
 };
 const oldTrain=train;
