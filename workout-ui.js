@@ -57,22 +57,54 @@ window.formConfirmPair=function(index){
  const old=new Set([sessionDraft.supersets[source],sessionDraft.supersets[target]].filter(Boolean));
  for(const [n,v] of Object.entries(sessionDraft.supersets))if(old.has(v))delete sessionDraft.supersets[n];
  sessionDraft.supersets[source]=label;sessionDraft.supersets[target]=label;
- persist();editSession();
+ openCards=new Set([0]);persist();editSession();
 };
 window.formUnpairExercise=function(index){
  const name=exerciseGroups()[index]?.name,label=pairOf(name);if(!label)return;
  for(const [n,v] of Object.entries(sessionDraft.supersets))if(v===label)delete sessionDraft.supersets[n];
- persist();renderWorkout();
+ openCards=new Set([0]);persist();renderWorkout();
 };
+// A visual block represents either one exercise or an alternating superset.
+// The underlying sets remain unchanged, preserving history and draft compatibility.
+function workoutBlocks(groups){
+ const used=new Set(),blocks=[];
+ groups.forEach((g,i)=>{
+  if(used.has(i))return;
+  const label=g.superset;
+  const members=label?groups.map((x,j)=>({...x,index:j})).filter(x=>x.superset===label):[];
+  if(members.length>=2){members.forEach(x=>used.add(x.index));blocks.push({label,members});}
+  else {used.add(i);blocks.push({label:null,members:[{...g,index:i}]});}
+ });
+ return blocks;
+}
+function setRow(s,name){
+ const k=indexFor(s);
+ return `<div class="workout-set-grid"><span>${s.set}</span><span class="tiny muted">${lastSet(name,s.set)}</span><input aria-label="${safeText(name)} weight set ${s.set}" type="number" min="0" step="0.5" value="${Number(s.weight)||0}" oninput="formDraftValue(${k},'weight',this.value)"><input aria-label="${safeText(name)} reps set ${s.set}" type="number" min="0" step="1" value="${Number(s.reps)||0}" oninput="formDraftValue(${k},'reps',this.value)"><input aria-label="${safeText(name)} complete set ${s.set}" type="checkbox" ${done[k]?'checked':''} onchange="formDraftDone(${k},this.checked)"></div>`;
+}
+function setHeader(){return '<div class="workout-set-grid workout-set-head"><span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>Done</span></div>'}
+function exerciseActions(g,index,groups){
+ return `<div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${index})">Swap</button><button class="button secondary small" onclick="formPairExercise(${index})">Pair</button>${g.superset?`<button class="button secondary small" onclick="formUnpairExercise(${index})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${index},-1)" ${index===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${index},1)" ${index===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${index})">Remove</button></div>`;
+}
 function renderWorkout(){
  if(!sessionDraft)return;
- const groups=exerciseGroups();
+ const groups=exerciseGroups(),blocks=workoutBlocks(groups);
  const total=sessionDraft.sets.length,completed=done.filter(Boolean).length;
  const html=`<h2>${safeText(sessionDraft.name)}</h2><p class="muted tiny">${completed} / ${total} sets completed · Changes saved on this device as you type.</p>
  <div class="progress" style="margin-bottom:16px"><div style="width:${total?100*completed/total:0}%"></div></div>
- ${groups.map((g,i)=>`<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${i})" aria-expanded="${openCards.has(i)}"><span><span class="tiny muted">${g.style==='superset'?'SUPERSET '+safeText(g.superset||''): 'STRAIGHT SETS'}</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(i)?'−':'+'}</span></button>
- <div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${i})">Swap</button><button class="button secondary small" onclick="formPairExercise(${i})">Pair</button>${pairOf(g.name)?`<button class="button secondary small" onclick="formUnpairExercise(${i})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${i},1)" ${i===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${i})">Remove</button></div>
- ${openCards.has(i)?`<div class="workout-set-grid workout-set-head"><span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>Done</span></div>${g.sets.map(s=>{let k=indexFor(s);return `<div class="workout-set-grid"><span>${s.set}</span><span class="tiny muted">${lastSet(g.name,s.set)}</span><input aria-label="Weight set ${s.set}" type="number" min="0" step="0.5" value="${Number(s.weight)||0}" oninput="formDraftValue(${k},'weight',this.value)"><input aria-label="Reps set ${s.set}" type="number" min="0" step="1" value="${Number(s.reps)||0}" oninput="formDraftValue(${k},'reps',this.value)"><input aria-label="Complete set ${s.set}" type="checkbox" ${done[k]?'checked':''} onchange="formDraftDone(${k},this.checked)"></div>`}).join('')}<p class="tiny muted">${g.style==='superset'?'Alternate with its paired accessory exercise; rest after the pair.':'Rest approximately 2–3 minutes after demanding compound sets.'}</p>`:''}</section>`).join('')}
+ ${blocks.map((block,bi)=>{
+  if(block.members.length===1){
+   const g=block.members[0],i=g.index;
+   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">STRAIGHT SETS</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>${exerciseActions(g,i,groups)}${openCards.has(bi)?setHeader()+g.sets.map(s=>setRow(s,g.name)).join('')+'<p class="tiny muted">Rest as needed between sets.</p>':''}</section>`;
+  }
+  const rounds=Math.max(...block.members.map(g=>g.sets.length));
+  return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">SUPERSET ${safeText(block.label)}</span><strong>${block.members.map(g=>safeText(g.name)).join(' + ')}</strong><span class="tiny muted">${rounds} alternating rounds · ${block.members.length} exercises</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>
+  ${openCards.has(bi)?Array.from({length:rounds},(_,ri)=>{
+   const present=block.members.filter(g=>g.sets[ri]);
+   const finished=present.every(g=>done[indexFor(g.sets[ri])]);
+   return `<div class="form-round"><div class="row" style="margin:10px 0"><b style="color:#a8e6bc">Round ${ri+1}</b><span class="tiny muted">${finished?'Complete':'Alternate exercises in order'}</span></div>${present.map((g,gi)=>`<div class="form-round-exercise"><div class="row"><strong>${safeText(block.label)}${gi+1} · ${safeText(g.name)}</strong><span class="tiny muted">Set ${g.sets[ri].set}</span></div>${setHeader()}${setRow(g.sets[ri],g.name)}</div>`).join('')}<p class="tiny muted">${ri<rounds-1?'Rest after this round, then repeat.':'Superset finished after this round.'}</p></div>`;
+  }).join(''):'<p class="tiny muted">Expand to log each alternating round.</p>'}
+  ${block.members.map(g=>`<div class="form-superset-actions"><span class="tiny muted">${safeText(g.name)}</span>${exerciseActions(g,g.index,groups)}</div>`).join('')}</section>`;
+ }).join('')}
  <div class="actions"><button class="button secondary" onclick="formAddDuringWorkout()">+ Add exercise</button><button class="button" onclick="finishSession()">Finish & save</button><button class="button secondary" onclick="formKeepDraft()">Save & close</button><button class="button danger" onclick="formDiscardDraft()">Discard draft</button></div>`;
  $('modalContent').innerHTML=html;
 }
@@ -121,7 +153,7 @@ window.formConfirmSwap=function(index){
  let next=1;
  for(const i of pending){entries[i]={set:{...entries[i].set,exercise:replacement,set:next++,weight:0,reps:group.reps},done:false}}
  // Keep completed original sets and new replacement sets distinct in the session.
- if(sessionDraft.supersets)delete sessionDraft.supersets[group.name];openCards=new Set([index,index+1]);replaceDraft(entries);
+ if(sessionDraft.supersets){const label=sessionDraft.supersets[group.name];if(label){sessionDraft.supersets[replacement]=label;if(!indices.some(i=>done[i]))delete sessionDraft.supersets[group.name];}}openCards=new Set([0]);replaceDraft(entries);
 };
 window.formRemoveExercise=function(index){
  const group=exerciseGroups()[index];if(!group)return;
