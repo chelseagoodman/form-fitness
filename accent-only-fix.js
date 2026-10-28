@@ -36,6 +36,24 @@
     let el=document.getElementById('form-accent-only-style');
     if(!el){el=document.createElement('style');el.id='form-accent-only-style';document.head.appendChild(el);}
     el.textContent=`
+    :root, body {
+  background: #101716 !important;
+}
+
+.card, dialog, .workout-card {
+  background: #1b2622 !important;
+  border-color: #304037 !important;
+}
+
+.nav {
+  background: #17211d !important;
+  border-color: #33443b !important;
+}
+
+input, select, textarea {
+  background: #121b17 !important;
+  border-color: #425349 !important;
+}
       .button:not(.secondary):not(.danger),.tabs button.selected {
         background:linear-gradient(135deg,${light},${main} 55%,${dark})!important;
         color:#101010!important;
