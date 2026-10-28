@@ -18,7 +18,7 @@ function exerciseGroups(){
   g.sets.push(s);
  }
  const routine=db.routines.find(r=>r.id===sessionDraft.routineId);
- groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=pairOf(g.name)?'superset':e?.style||'straight';g.superset=pairOf(g.name)||e?.supersetGroup||null;g.reps=e?.reps||10;});
+ groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=pairOf(g.name)?'superset':'straight';g.superset=pairOf(g.name)||null;g.reps=e?.reps||10;});
  return groups;
 }
 function indexFor(s){return sessionDraft.sets.indexOf(s)}
@@ -57,11 +57,19 @@ window.formConfirmPair=function(index){
  const old=new Set([sessionDraft.supersets[source],sessionDraft.supersets[target]].filter(Boolean));
  for(const [n,v] of Object.entries(sessionDraft.supersets))if(old.has(v))delete sessionDraft.supersets[n];
  sessionDraft.supersets[source]=label;sessionDraft.supersets[target]=label;
+ if(confirm('Save this superset pairing to the original routine for future workouts? Cancel keeps it in this workout only.')){
+  const r=db.routines.find(r=>r.id===sessionDraft.routineId);
+  if(r){for(const e of r.exercises){if(e.name===source||e.name===target){e.style='superset';e.supersetGroup=label;}else if(old.has(e.supersetGroup)){e.style='straight';e.supersetGroup=null;}}save();}
+ }
  openCards=new Set([0]);persist();editSession();
 };
 window.formUnpairExercise=function(index){
  const name=exerciseGroups()[index]?.name,label=pairOf(name);if(!label)return;
  for(const [n,v] of Object.entries(sessionDraft.supersets))if(v===label)delete sessionDraft.supersets[n];
+ if(confirm('Also unpair these exercises permanently in the saved routine? Cancel changes only this workout.')){
+  const r=db.routines.find(r=>r.id===sessionDraft.routineId);
+  if(r){for(const e of r.exercises)if(e.supersetGroup===label){e.style='straight';e.supersetGroup=null;}save();}
+ }
  openCards=new Set([0]);persist();renderWorkout();
 };
 // A visual block represents either one exercise or an alternating superset.
@@ -137,23 +145,36 @@ function libraryNames(){
 }
 window.formSwapExercise=function(index){
  const group=exerciseGroups()[index];if(!group)return;
- const names=libraryNames().filter(x=>x.toLowerCase()!==group.name.toLowerCase());
- $('modalContent').innerHTML=`<h2>Swap ${safeText(group.name)}</h2><p class="muted">Completed sets stay under the original exercise. Uncompleted sets become the replacement.</p><label>Replacement exercise</label><input id="swapExerciseName" list="swapOptions" placeholder="Search or type exercise"><datalist id="swapOptions">${names.map(n=>`<option value="${safeText(n)}"></option>`).join('')}</datalist><div class="actions"><button class="button" onclick="formConfirmSwap(${index})">Confirm swap</button><button class="button secondary" onclick="editSession()">Cancel</button></div>`;
+ window.formSwapIndex=index;
+ const hidden=JSON.parse(localStorage.getItem('form-library-hidden-v1')||'[]');
+ const aliases=JSON.parse(localStorage.getItem('form-library-aliases-v1')||'{}');
+ const raw=[...FORM_EXERCISES,...FORM_PERSONAL_EXERCISES,...(db.exerciseLibrary||[])];
+ const unique=new Map();
+ for(const e of raw){const n=Array.isArray(e)?e[0]:e.name;if(!n)continue;const k=n.toLowerCase().trim();if(hidden.includes(k)||aliases[k]||k===group.name.toLowerCase())continue;if(!unique.has(k))unique.set(k,n);}
+ window.formSwapChoices=[...unique.values()].sort((a,b)=>a.localeCompare(b));
+ $('modalContent').innerHTML=`<h2>Swap ${safeText(group.name)}</h2><p class="tiny muted">Choose from your exercise library. Completed sets stay under the original exercise.</p><input id="formSwapSearch" placeholder="Search your exercise library" oninput="formSwapFilter()"><div id="formSwapList" style="max-height:230px;overflow-y:auto;overscroll-behavior:contain"></div><label>Or create a new exercise</label><input id="formSwapCustom" placeholder="New exercise name"><label><input type="checkbox" id="formSwapPermanent" style="width:auto;min-height:auto"> Update the saved routine permanently</label><div class="actions"><button class="button secondary" onclick="formSwapCreate(${index})">Use new exercise</button><button class="button secondary" onclick="editSession()">Cancel</button></div>`;
+ window.formSwapFilter();
 };
-window.formConfirmSwap=function(index){
- const replacement=$('swapExerciseName')?.value.trim();
- const group=exerciseGroups()[index];if(!group||!replacement)return alert('Select a replacement exercise.');
- if(replacement.toLowerCase()===group.name.toLowerCase())return alert('Choose a different exercise.');
+window.formSwapFilter=function(){const q=($('formSwapSearch')?.value||'').toLowerCase();const el=$('formSwapList');if(!el)return;el.innerHTML=(window.formSwapChoices||[]).filter(n=>n.toLowerCase().includes(q)).map(n=>`<div class="item row"><b>${safeText(n)}</b><button class="button small" onclick="formSwapSelect(decodeURIComponent('${encodeURIComponent(n)}'))">Select</button></div>`).join('')||'<p class="tiny muted">No matching exercises.</p>';};
+window.formSwapSelect=function(name){window.formSwapApply(window.formSwapIndex,name,false)};
+window.formSwapCreate=function(index){const name=$('formSwapCustom')?.value.trim();if(!name)return alert('Enter an exercise name.');window.formSwapApply(index,name,true)};
+window.formSwapApply=function(index,replacement,custom){
+ const group=exerciseGroups()[index];if(!group||!replacement)return;
  if(sessionDraft.sets.some(x=>x.exercise.toLowerCase()===replacement.toLowerCase()))return alert('That exercise is already in this workout.');
- if(!libraryNames().some(n=>n.toLowerCase()===replacement.toLowerCase())&&confirm('Add this new exercise to your library for future workouts?')){db.exerciseLibrary=db.exerciseLibrary||[];db.exerciseLibrary.push([replacement,'Other','Custom']);save();}
- const indices=groupIndices(index),entries=draftEntries();
- const pending=indices.filter(i=>!done[i]);
+ const permanent=!!$('formSwapPermanent')?.checked;
+ const indices=groupIndices(index),pending=indices.filter(i=>!done[i]);
  if(!pending.length)return alert('All sets are complete. Add a new exercise instead.');
- if(!confirm(`Replace ${pending.length} unfinished sets with ${replacement}? Completed sets will stay recorded.`))return;
- let next=1;
- for(const i of pending){entries[i]={set:{...entries[i].set,exercise:replacement,set:next++,weight:0,reps:group.reps},done:false}}
- // Keep completed original sets and new replacement sets distinct in the session.
- if(sessionDraft.supersets){const label=sessionDraft.supersets[group.name];if(label){sessionDraft.supersets[replacement]=label;if(!indices.some(i=>done[i]))delete sessionDraft.supersets[group.name];}}openCards=new Set([0]);replaceDraft(entries);
+ if(!confirm(`Swap ${pending.length} unfinished sets to ${replacement}?`))return;
+ const entries=draftEntries();let next=1;
+ // Pull the replacement's own performance, never the previous exercise's weight.
+ const history=[...db.sessions].sort((a,b)=>b.date.localeCompare(a.date));
+ for(const i of pending){const previous=history.flatMap(s=>s.sets||[]).find(s=>s.exercise.toLowerCase()===replacement.toLowerCase()&&s.set===next);
+  entries[i]={set:{...entries[i].set,exercise:replacement,set:next++,weight:previous?.weight||0,reps:previous?.reps||group.reps},done:false};}
+ if(custom){db.exerciseLibrary=db.exerciseLibrary||[];const existing=[...FORM_EXERCISES,...FORM_PERSONAL_EXERCISES,...db.exerciseLibrary].some(e=>String(e[0]).toLowerCase()===replacement.toLowerCase());if(!existing)db.exerciseLibrary.push([replacement,'Other','Custom']);}
+ if(sessionDraft.supersets){const label=sessionDraft.supersets[group.name];if(label){sessionDraft.supersets[replacement]=label;if(!indices.some(i=>done[i]))delete sessionDraft.supersets[group.name];}}
+ if(permanent){const r=db.routines.find(r=>r.id===sessionDraft.routineId);if(r){const e=r.exercises.find(e=>e.name===group.name);if(e){e.name=replacement;save();}}}
+ else if(custom)save();
+ openCards=new Set([0]);replaceDraft(entries);
 };
 window.formRemoveExercise=function(index){
  const group=exerciseGroups()[index];if(!group)return;
@@ -178,7 +199,11 @@ startSession=function(id){
  if(!sessionDraft){close();return}
  done=sessionDraft.sets.map(()=>false);openCards=new Set([0]);
  sessionDraft.supersets=sessionDraft.supersets||{};
- formPopulateTargets();persist();renderWorkout();
+ // Convert routine-defined pairings into editable session pairings.
+ const routine=db.routines.find(r=>r.id===id);
+ for(const e of routine?.exercises||[])if(e.style==='superset'&&e.supersetGroup&&!sessionDraft.supersets[e.name])sessionDraft.supersets[e.name]=e.supersetGroup;
+ sessionDraft.startedAt=Date.now();
+ formPopulateTargets();persist();editSession();
 };
 editSession=function(){renderWorkout();persist()};
 finishSession=function(){

@@ -3,17 +3,17 @@
 (function(){
 'use strict';
 const PREF='form-v21-preferences', META='form-v21-exercise-meta', DRAFT='form-active-workout-v1';
-const defaults={compoundRest:150,accessoryRest:75,supersetRest:90,autoRest:true,autoNext:false,rir:2,showPrevious:true,block:'progression',blockWeeks:4,checkinDay:'none',stepGoal:8000};
+const defaults={compoundRest:150,accessoryRest:75,supersetRest:90,autoRest:false,autoNext:false,rir:2,showPrevious:true,block:'progression',blockWeeks:4,checkinDay:'none',stepGoal:8000};
 let prefs={...defaults};try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREF)||'{}')}}catch{}
 let meta={};try{meta=JSON.parse(localStorage.getItem(META)||'{}')||{}}catch{}
 const $id=id=>document.getElementById(id), safe=s=>esc(String(s??''));
 const persist=()=>{try{localStorage.setItem(PREF,JSON.stringify(prefs));localStorage.setItem(META,JSON.stringify(meta))}catch{alert('Could not save FORM preferences.')}};
 const field=(label,key,values)=>`<label for="v21-${key}">${label}</label><select id="v21-${key}" onchange="formV21Set('${key}',this.value)">${values.map(([v,t])=>`<option value="${v}" ${String(prefs[key])===String(v)?'selected':''}>${t}</option>`).join('')}</select>`;
 function settingsPanel(){return `<div class="card"><h2>Training preferences</h2><p class="tiny muted">These settings apply to new workout activity; all existing records remain unchanged.</p>
-${field('Heavy compound rest','compoundRest',[[90,'90 seconds'],[120,'2 minutes'],[150,'2 min 30 sec'],[180,'3 minutes']])}
-${field('Accessory rest','accessoryRest',[[45,'45 seconds'],[60,'60 seconds'],[75,'75 seconds'],[90,'90 seconds']])}
-${field('Superset round rest','supersetRest',[[45,'45 seconds'],[60,'60 seconds'],[90,'90 seconds'],[120,'2 minutes']])}
-${field('Automatically start rest timer','autoRest',[['true','On'],['false','Off']])}
+
+
+
+
 ${field('Automatically highlight next set','autoNext',[['true','On'],['false','Off']])}
 ${field('Default reps in reserve (RIR)','rir',[[0,'0'],[1,'1'],[2,'2'],[3,'3'],[4,'4']])}
 ${field('Training block focus','block',[['progression','Progressive overload'],['tempo','Controlled eccentrics'],['hypertrophy','Hypertrophy'],['amrap','Selected AMRAP sets'],['deload','Deload / recovery']])}
@@ -37,7 +37,7 @@ function getDuration(){if(!sessionDraft)return 0;sessionDraft.startedAt=sessionD
 function durationText(){const n=getDuration();return `${Math.floor(n/3600)}h ${String(Math.floor(n%3600/60)).padStart(2,'0')}m`}
 function addWorkoutExtras(){const host=$id('modalContent');if(!host||!sessionDraft)return;
  let header=$id('v21-session-header');if(!header){header=document.createElement('div');header.id='v21-session-header';header.className='notice';host.prepend(header)}
- header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b><span id="v21-rest">Rest timer ready</span></div><div class="actions"><button class="button secondary small" onclick="formV21Rest(${Number(prefs.accessoryRest)})">Start rest</button><button class="button secondary small" onclick="formV21StopRest()">Stop rest</button></div><div class="tiny muted">Block: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks. RIR records effort; enter it after each set.</div>`;
+ header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b></div><div class="tiny muted">Block: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks. RIR records effort; enter it after each set.</div>`;
  const grids=host.querySelectorAll('.workout-set-grid:not(.workout-set-head)');
  for(const grid of grids){const box=grid.querySelector('input[type="checkbox"]');if(!box)continue;const m=box.getAttribute('onchange')?.match(/formDraftDone\((\d+),/);if(!m)continue;const i=Number(m[1]),set=sessionDraft.sets[i];if(!set||grid.querySelector('.v21-rir'))continue;
  const wrap=document.createElement('label');wrap.className='v21-rir';wrap.style.cssText='display:flex;align-items:center;gap:5px;font-size:11px;margin:0';wrap.textContent='RIR';const input=document.createElement('input');input.type='number';input.min='0';input.max='10';input.step='1';input.value=String(set.rir??prefs.rir);input.style.cssText='width:55px;min-width:0;padding:5px;min-height:30px';input.addEventListener('input',()=>{set.rir=input.value===''?null:Math.max(0,Math.min(10,Number(input.value)||0));persistDraft()});wrap.appendChild(input);grid.appendChild(wrap);
@@ -48,9 +48,10 @@ function addWorkoutExtras(){const host=$id('modalContent');if(!host||!sessionDra
 function persistDraft(){if(!sessionDraft)return;try{const old=JSON.parse(localStorage.getItem(DRAFT)||'{}');localStorage.setItem(DRAFT,JSON.stringify({...old,draft:sessionDraft}))}catch{}}
 const oldEdit=editSession;editSession=function(){oldEdit();addWorkoutExtras();persistDraft()};
 const oldDone=window.formDraftDone;
-window.formDraftDone=function(i,v){oldDone(i,v);if(!v||!prefs.autoRest)return;const s=sessionDraft?.sets?.[i];if(!s)return;const label=groupFor(s.exercise);if(label){const same=sessionDraft.sets.filter(x=>groupFor(x.exercise)===label&&x.set===s.set);const last=same[same.length-1];if(last!==s)return;window.formV21Rest(Number(prefs.supersetRest));}else{const isCompound=/press|squat|deadlift|rdl|row|thrust|pulldown/i.test(s.exercise);window.formV21Rest(Number(isCompound?prefs.compoundRest:prefs.accessoryRest));}
+window.formDraftDone=function(i,v){oldDone(i,v);return; if(!v||!prefs.autoRest)return;const s=sessionDraft?.sets?.[i];if(!s)return;const label=groupFor(s.exercise);if(label){const same=sessionDraft.sets.filter(x=>groupFor(x.exercise)===label&&x.set===s.set);const last=same[same.length-1];if(last!==s)return;window.formV21Rest(Number(prefs.supersetRest));}else{const isCompound=/press|squat|deadlift|rdl|row|thrust|pulldown/i.test(s.exercise);window.formV21Rest(Number(isCompound?prefs.compoundRest:prefs.accessoryRest));}
  if(prefs.autoNext){const boxes=[...document.querySelectorAll('#modalContent .workout-set-grid input[type="checkbox"]')];const next=boxes.find(x=>!x.checked);next?.closest('.workout-set-grid')?.scrollIntoView({behavior:'smooth',block:'center'});}
 };
+setInterval(()=>{const el=document.getElementById('v21-duration');if(el&&sessionDraft)el.textContent=durationText()},1000);
 const oldFinish=finishSession;finishSession=function(){const before=db.sessions.length,seconds=sessionDraft?getDuration():0;oldFinish();if(db.sessions.length>before){db.sessions[db.sessions.length-1].durationSeconds=seconds;save();}};
 const oldStart=startSession;startSession=function(id){oldStart(id);if(sessionDraft){sessionDraft.startedAt=sessionDraft.startedAt||Date.now();persistDraft();addWorkoutExtras()}};
 // Supplement Coach with non-AI deload guidance based on recent logged performance.

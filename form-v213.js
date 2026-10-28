@@ -1,0 +1,14 @@
+// FORM v2.1.3: local food quick add and optional 15-rep progression suggestions.
+(function(){
+'use strict';
+const oldNutrition=nutrition;
+nutrition=function(){return oldNutrition()+`<div class="card"><h2>Saved foods / Quick Add</h2><p class="tiny muted">Search foods you have logged before. Reuse their macros and edit before saving.</p><input id="quickFoodQuery" placeholder="Search saved foods" oninput="formQuickFoodRender()"><div id="quickFoodResults" style="max-height:180px;overflow-y:auto"></div></div>`};
+window.formQuickFoodRender=function(){const box=document.getElementById('quickFoodResults');if(!box)return;const q=(document.getElementById('quickFoodQuery')?.value||'').toLowerCase();const unique=new Map();for(const f of [...db.foods].reverse()){const k=f.name?.trim().toLowerCase();if(k&&!unique.has(k))unique.set(k,f)}const items=[...unique.values()].filter(f=>f.name.toLowerCase().includes(q));box.innerHTML=items.map(f=>`<div class="item row"><div><b>${esc(f.name)}</b><div class="tiny muted">${f.calories} kcal · P ${f.protein} · C ${f.carbs} · F ${f.fat}</div></div><button class="button secondary small" onclick="formQuickFoodUse('${encodeURIComponent(f.name)}')">Use</button></div>`).join('')||'<p class="tiny muted">No saved foods match.</p>';};
+window.formQuickFoodUse=function(encoded){const name=decodeURIComponent(encoded),f=[...db.foods].reverse().find(x=>x.name===name);if(!f)return;foodForm();for(const [id,v] of [['fn',f.name],['fc',f.calories],['fp',f.protein],['fcar',f.carbs],['ff',f.fat]]){const el=document.getElementById(id);if(el)el.value=v;}};
+const previousRender=render;
+render=function(){previousRender();if(page==='nutrition')window.formQuickFoodRender();};
+// Suggestions only: do not silently change user-entered sets or AMRAP targets.
+const previousProgress=progress;
+progress=function(){let html=previousProgress();const recommendations=[];for(const r of db.routines||[])for(const e of r.exercises||[]){if(e.amrap||/amrap/i.test(e.style||''))continue;const last=[...db.sessions].sort((a,b)=>b.date.localeCompare(a.date)).find(s=>s.sets?.some(x=>x.exercise===e.name));if(!last)continue;const sets=last.sets.filter(s=>s.exercise===e.name);if(sets.length>=Number(e.sets||1)&&sets.every(s=>Number(s.reps)>=15&&Number(s.weight)>0&&(s.rir===undefined||s.rir===null||Number(s.rir)>=1))){recommendations.push(`<div class="item"><b>${esc(e.name)}</b><div class="tiny muted">Reached 15+ reps across working sets. Consider a small load increase and return to your lower rep target, if technique and recovery support it.</div></div>`);}}
+return html+`<div class="card"><h2>15-rep progression review</h2><p class="tiny muted">Suggestions only. AMRAP exercises are excluded. Future AI plans can set exercise-specific rep ranges and increments.</p>${recommendations.slice(0,15).join('')||'<p class="tiny muted">No exercises currently meet this rule.</p>'}</div>`;};
+})();
