@@ -87,8 +87,17 @@ function workoutBlocks(groups){
 }
 function setRow(s,name){
  const k=indexFor(s);
- return `<div class="workout-set-grid"><span>${s.set}</span><span class="tiny muted">${lastSet(name,s.set)}</span><input aria-label="${safeText(name)} weight set ${s.set}" type="number" min="0" step="0.5" value="${Number(s.weight)||0}" oninput="formDraftValue(${k},'weight',this.value)"><input aria-label="${safeText(name)} reps set ${s.set}" type="number" min="0" step="1" value="${Number(s.reps)||0}" oninput="formDraftValue(${k},'reps',this.value)"><input aria-label="${safeText(name)} complete set ${s.set}" type="checkbox" ${done[k]?'checked':''} onchange="formDraftDone(${k},this.checked)"></div>`;
+ const current=s.rir===null||s.rir===undefined?'':String(s.rir);
+ const options=[['','Not rated'],...Array.from({length:6},(_,n)=>[String(n),String(n)])];
+ if(current!==''&&!options.some(o=>o[0]===current))options.push([current,current]);
+ const rir=`<label class="form-set-rir" style="display:flex;align-items:center;gap:10px;margin:5px 0 12px;font-size:13px;font-weight:600;max-width:260px">RIR (reps left) <select aria-label="${safeText(name)} RIR set ${s.set}" style="flex:1;min-width:100px;min-height:44px;font-size:16px;font-weight:700" onchange="formDraftRIR(${k},this.value)">${options.map(([v,t])=>`<option value="${v}" ${current===v?'selected':''}>${t}</option>`).join('')}</select></label>`;
+ return `<div class="workout-set-grid"><span>${s.set}</span><span class="tiny muted">${lastSet(name,s.set)}</span><input aria-label="${safeText(name)} weight set ${s.set}" type="number" min="0" step="0.5" value="${Number(s.weight)||0}" oninput="formDraftValue(${k},'weight',this.value)"><input aria-label="${safeText(name)} reps set ${s.set}" type="number" min="0" step="1" value="${Number(s.reps)||0}" oninput="formDraftValue(${k},'reps',this.value)"><input aria-label="${safeText(name)} complete set ${s.set}" type="checkbox" ${done[k]?'checked':''} onchange="formDraftDone(${k},this.checked)"></div>${rir}`;
 }
+window.formDraftRIR=function(i,value){
+ if(!sessionDraft?.sets?.[i])return;
+ sessionDraft.sets[i].rir=value===''?null:Number(value);
+ persist();
+};
 function setHeader(){return '<div class="workout-set-grid workout-set-head"><span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>Done</span></div>'}
 function exerciseActions(g,index,groups){
  return `<div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${index})">Swap</button><button class="button secondary small" onclick="formPairExercise(${index})">Pair</button>${g.superset?`<button class="button secondary small" onclick="formUnpairExercise(${index})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${index},-1)" ${index===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${index},1)" ${index===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${index})">Remove</button></div>`;

@@ -38,30 +38,8 @@ function durationText(){const n=getDuration();return `${Math.floor(n/3600)}h ${S
 function addWorkoutExtras(){const host=$id('modalContent');if(!host||!sessionDraft)return;
  let header=$id('v21-session-header');if(!header){header=document.createElement('div');header.id='v21-session-header';header.className='notice';host.prepend(header)}
  header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b></div><div class="tiny muted">Block: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks. RIR records effort; enter it after each set.</div>`;
- const grids=host.querySelectorAll('.workout-set-grid:not(.workout-set-head)');
- for(const grid of grids){const box=grid.querySelector('input[type="checkbox"]');if(!box)continue;const m=box.getAttribute('onchange')?.match(/formDraftDone\((\d+),/);if(!m)continue;const i=Number(m[1]),set=sessionDraft.sets[i];if(!set)continue;
- // RIR is a sibling of the set grid, not a child. Remove stale duplicates.
- let next=grid.nextElementSibling;
- while(next&&next.classList.contains('v21-rir')){const remove=next;next=next.nextElementSibling;remove.remove();}
- const wrap=document.createElement('label');
- wrap.className='v21-rir';
- wrap.style.cssText='display:flex;flex-direction:column;gap:4px;align-items:stretch;margin:6px 0 8px;font-size:12px;font-weight:700;color:#f1f5f2;width:100%;max-width:140px';
- wrap.textContent='RIR (reps left)';
- const select=document.createElement('select');
- select.setAttribute('aria-label','Reps in reserve for set '+set.set);
- select.style.cssText='width:100%;min-width:100px;min-height:44px;padding:9px 12px;font-size:16px;font-weight:700;color:#fff;background:#18231e;border:1px solid #7c9383;border-radius:10px';
- const current=set.rir===undefined||set.rir===null?'':String(set.rir);
- const options=[['','Not rated'],...Array.from({length:6},(_,n)=>[String(n),String(n)])];
- if(current!==''&&!options.some(o=>o[0]===current))options.push([current,current]);
- for(const [value,label] of options){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=value===current;select.appendChild(option)}
- select.addEventListener('change',()=>{
-   set.rir=select.value===''?null:Number(select.value);
-   persistDraft();
- });
- wrap.appendChild(select);
- // A separate full-width row keeps the value visible on narrow iPhone screens.
- grid.insertAdjacentElement('afterend',wrap);
- }
+ // RIR is rendered by workout-ui.js within each set row.
+ // Do not inject another RIR control here: that caused duplicates and disappearing fields.
  const groups=exerciseNames();for(const name of groups){const headings=[...host.querySelectorAll('.workout-card strong')].filter(el=>el.textContent.trim()===name);if(!headings.length)continue;const heading=headings[0];if(heading.parentElement.querySelector('.v21-note'))continue;const note=document.createElement('div');note.className='v21-note tiny muted';note.style.marginTop='5px';note.textContent=meta[name]?.note?`Note: ${meta[name].note}`:'';heading.parentElement.appendChild(note)}
  refreshTimer();const dur=$id('v21-duration');if(dur)dur.textContent=durationText();
 }
