@@ -39,7 +39,10 @@ function addWorkoutExtras(){const host=$id('modalContent');if(!host||!sessionDra
  let header=$id('v21-session-header');if(!header){header=document.createElement('div');header.id='v21-session-header';header.className='notice';host.prepend(header)}
  header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b></div><div class="tiny muted">Block: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks. RIR records effort; enter it after each set.</div>`;
  const grids=host.querySelectorAll('.workout-set-grid:not(.workout-set-head)');
- for(const grid of grids){const box=grid.querySelector('input[type="checkbox"]');if(!box)continue;const m=box.getAttribute('onchange')?.match(/formDraftDone\((\d+),/);if(!m)continue;const i=Number(m[1]),set=sessionDraft.sets[i];if(!set||grid.querySelector('.v21-rir'))continue;
+ for(const grid of grids){const box=grid.querySelector('input[type="checkbox"]');if(!box)continue;const m=box.getAttribute('onchange')?.match(/formDraftDone\((\d+),/);if(!m)continue;const i=Number(m[1]),set=sessionDraft.sets[i];if(!set)continue;
+ // RIR is a sibling of the set grid, not a child. Remove stale duplicates.
+ let next=grid.nextElementSibling;
+ while(next&&next.classList.contains('v21-rir')){const remove=next;next=next.nextElementSibling;remove.remove();}
  const wrap=document.createElement('label');
  wrap.className='v21-rir';
  wrap.style.cssText='display:flex;flex-direction:column;gap:4px;align-items:stretch;margin:6px 0 8px;font-size:12px;font-weight:700;color:#f1f5f2;width:100%;max-width:140px';
