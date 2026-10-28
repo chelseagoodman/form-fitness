@@ -38,4 +38,5 @@ function applyTheme(){
  const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',t.bg);
 }
 applyTheme();
+render();
 })();
