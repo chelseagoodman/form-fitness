@@ -13,7 +13,7 @@ export async function onRequest({request,env,params}){
   if(!env.FORM_AI||!env.FORM_AI_SERVICE_SECRET||env.FORM_AI_SERVICE_SECRET.length<32)return json({error:'AI gateway not configured'},503);
   const path=Array.isArray(params.path)?params.path.join('/'):params.path||'';
   if(request.method==='GET'&&path==='session')return json({signedIn:await valid(request,env.FORM_AI_SERVICE_SECRET)});
-  if(request.method!=='POST'||!['login','logout','analyze','checkin'].includes(path))return json({error:'Not found'},404);
+  if(request.method!=='POST'||!['login','logout','analyze'].includes(path))return json({error:'Not found'},404);
   if(!originOK(request))return json({error:'Origin rejected'},403);
   if(!(request.headers.get('Content-Type')||'').startsWith('application/json'))return json({error:'JSON required'},415);
   if(Number(request.headers.get('Content-Length')||0)>3000000)return json({error:'Request too large'},413);
@@ -33,6 +33,11 @@ export async function onRequest({request,env,params}){
   if(path==='checkin'){
    if(!data||!Array.isArray(data.checkins)||data.checkins.length>8||!Array.isArray(data.training))return json({error:'Invalid check-in request'},400);
    const response=await internal(env,'checkin',data,request.headers.get('CF-Connecting-IP'));
+   return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  }
+  if(path==='training'){
+   if(!data||!Array.isArray(data.sessions)||data.sessions.length>12||!Array.isArray(data.checkins)||data.checkins.length>8)return json({error:'Invalid training review request'},400);
+   const response=await internal(env,'training',data,request.headers.get('CF-Connecting-IP'));
    return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   }
   if(typeof data.description!=='string'||data.description.length>1200||(!data.description.trim()&&!data.image))return json({error:'Enter a meal description or photo'},400);
