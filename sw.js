@@ -1,4 +1,4 @@
-const CACHE='form-v2.3';const ASSETS=['./','./index.html','./app.js','./upgrade.js','./generator.js','./split.js','./personal-library.js','./workout-ui.js','./checkins.js','./progress-unified.js','./checkin-layout.js','./form-settings.js','./photo-privacy.js',
+const CACHE='form-v2.3.1-ai-test';const ASSETS=['./','./index.html','./app.js','./upgrade.js','./generator.js','./split.js','./personal-library.js','./workout-ui.js','./checkins.js','./progress-unified.js','./checkin-layout.js','./form-settings.js','./photo-privacy.js',
 './settings-refinements.js','./accent-only-fix.js','./form-v21.js',
 './brand-v21.js','./library-v22.js',
 './brand-v22.js','./brand-exact.js',
