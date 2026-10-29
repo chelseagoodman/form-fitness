@@ -13,7 +13,7 @@ export async function onRequest({request,env,params}){
   if(!env.FORM_AI||!env.FORM_AI_SERVICE_SECRET||env.FORM_AI_SERVICE_SECRET.length<32)return json({error:'AI gateway not configured'},503);
   const path=Array.isArray(params.path)?params.path.join('/'):params.path||'';
   if(request.method==='GET'&&path==='session')return json({signedIn:await valid(request,env.FORM_AI_SERVICE_SECRET)});
-  if(request.method!=='POST'||!['login','logout','analyze'].includes(path))return json({error:'Not found'},404);
+  if(request.method!=='POST'||!['login','logout','analyze','checkin','training'].includes(path))return json({error:'Not found'},404);
   if(!originOK(request))return json({error:'Origin rejected'},403);
   if(!(request.headers.get('Content-Type')||'').startsWith('application/json'))return json({error:'JSON required'},415);
   if(Number(request.headers.get('Content-Length')||0)>3000000)return json({error:'Request too large'},413);
