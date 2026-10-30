@@ -41,7 +41,7 @@ export async function onRequest({request,env,params}){
    return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   }
   if(path==='coach'){
-   if(!data||!['chat','weekly','plan'].includes(data.mode)||typeof data.message!=='string'||data.message.length>1200)return json({error:'Invalid coach request'},400);
+   if(!data||!['change','review','advice'].includes(data.mode)||typeof data.message!=='string'||data.message.length>1200)return json({error:'Invalid coach request'},400);
    const response=await internal(env,'coach',data,request.headers.get('CF-Connecting-IP'));
    return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   }
