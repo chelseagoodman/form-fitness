@@ -19,12 +19,12 @@ function context(includeCycle,includeTraining,includeNutrition){
 }
 function settings(){return {cycle:!!document.getElementById('v32cycle')?.checked,training:!!document.getElementById('v32training')?.checked,nutrition:!!document.getElementById('v32nutrition')?.checked}}
 function history(){return current().slice(-8).map(x=>({role:x.role,text:String(x.text).slice(0,1200)}))}
-function payload(){const s=settings();return {mode:document.getElementById('v32mode')?.value||'chat',message:document.getElementById('v32message')?.value.trim()||'',context:context(s.cycle,s.training,s.nutrition),history:history()}}
+function payload(){const s=settings();return {mode:document.getElementById('v32mode')?.value||'change',message:document.getElementById('v32message')?.value.trim()||'',context:context(s.cycle,s.training,s.nutrition),history:history()}}
 function updatePreview(){const el=document.getElementById('v32preview');if(el)el.textContent=JSON.stringify(payload(),null,2);const consent=document.getElementById('v32consent');if(consent)consent.checked=false}
 window.formCoachTalkHub=function(){
- modal(`<h2>Talk to Coach · v3.2 Test</h2><p class="tiny muted">Discuss your goal, request a weekly review or ask for a high-level plan. AI replies are suggestions only. No routines or macro targets change automatically.</p>
+ modal(`<h2>Talk to Coach · v3.3.1 Test</h2><p class="tiny muted">Ask for changes, request a review, or get advice. When you explicitly request a change, FORM will propose supported edits for your approval rather than defaulting to keeping the plan. Nothing is applied automatically.</p>
  <div id="v32login" hidden><label for="v32password">FORM AI password</label><input id="v32password" type="password" autocomplete="current-password"><button class="button" onclick="formV32Login()">Sign in</button></div>
- <label for="v32mode">Coaching task</label><select id="v32mode" onchange="formV32Preview()"><option value="chat">Talk to Coach</option><option value="weekly">Weekly review</option><option value="plan">Goal-based plan guidance</option></select>
+ <label for="v32mode">Coaching task</label><select id="v32mode" onchange="formV32Preview()"><option value="change">Request changes</option><option value="review">Review my plan</option><option value="advice">Ask for advice</option></select>
  <label for="v32message">What would you like help with?</label><textarea id="v32message" maxlength="1200" rows="4" oninput="formV32Preview()" placeholder="e.g. I am moving onto night shift. How should I adjust next week's training? "></textarea>
  <label><input id="v32training" type="checkbox" style="width:auto" onchange="formV32Preview()" checked> Include recent workout performance</label>
  <label><input id="v32nutrition" type="checkbox" style="width:auto" onchange="formV32Preview()"> Include food diary daily totals</label>
@@ -32,14 +32,30 @@ window.formCoachTalkHub=function(){
  <details><summary>Exact data to be sent to Gemini</summary><pre id="v32preview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:270px;overflow:auto"></pre></details>
  <label><input id="v32consent" type="checkbox" style="width:auto"> I approve sending this message, context and recent conversation to Gemini</label>
  <div class="actions"><button class="button" id="v32send" onclick="formV32Send()">Ask Coach</button><button class="button secondary" onclick="formV32Clear()">Clear saved conversation</button></div>
- <p id="v32status" class="tiny muted"></p><div id="v33proposals" class="card"></div><div id="v32history"></div>`);
+ <p id="v32status" class="tiny muted"></p><div id="v33proposals" class="card"></div><h3>Recent coaching conversations</h3><div id="v32history"></div>`);
  window.formV32Preview();renderHistory();checkSession();
 };
 window.formV32Preview=updatePreview;
 async function checkSession(){try{const r=await fetch('/api/ai/session',{credentials:'same-origin'});const x=await r.json();document.getElementById('v32login').hidden=!!x.signedIn;if(!x.signedIn)document.getElementById('v32status').textContent='Sign in to FORM AI before requesting coaching.'}catch{document.getElementById('v32status').textContent='Could not check AI session.'}}
 window.formV32Login=async function(){const b=document.querySelector('#v32login button');b.disabled=true;try{const r=await fetch('/api/ai/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('v32password').value})});const x=await r.json();if(!r.ok)throw Error(x.error||'Login failed');document.getElementById('v32password').value='';document.getElementById('v32login').hidden=true;document.getElementById('v32status').textContent='Signed in. Review and approve the data preview.'}catch(e){document.getElementById('v32status').textContent=e.message}finally{b.disabled=false}};
-function renderHistory(){const el=document.getElementById('v32history');if(!el)return;el.replaceChildren();for(const item of current().slice(-12)){const box=document.createElement('div');box.className='item';const h=document.createElement('b');h.textContent=item.role==='user'?'You':'FORM Coach';const p=document.createElement('p');p.style.whiteSpace='pre-wrap';p.textContent=item.text;box.append(h,p);el.append(box)}}
-window.formV32Send=async function(){const p=payload(),consent=document.getElementById('v32consent'),status=document.getElementById('v32status'),b=document.getElementById('v32send');if(!p.message)return alert('Enter a question or coaching request.');if(!consent.checked)return alert('Review the exact data and approve this request first.');b.disabled=true;status.textContent='Asking FORM Coach...';try{const r=await fetch('/api/ai/coach',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const x=await r.json();if(!r.ok)throw Error(x.error||'Coach unavailable');if(!x.review||typeof x.review.reply!=='string')throw Error('Invalid coaching reply');const reply=[x.review.reply,...(x.review.suggestions||[]).map(t=>'• '+t)].join('\n\n').slice(0,3800);const before=current().slice();db.coachConversation=[...before,{role:'user',text:p.message,date:TODAY()},{role:'coach',text:reply,date:TODAY()}].slice(-40);if(!save()){db.coachConversation=before;throw Error('Could not save conversation; check storage and export a backup.')}document.getElementById('v32message').value='';status.textContent='Coaching suggestions saved. Review proposed changes separately; none applied.';renderHistory();formV33ShowChanges(x.review.changes||[],p.context.plan);updatePreview()}catch(e){status.textContent=e.message;if(/sign in/i.test(e.message))checkSession()}finally{b.disabled=false}};
+function renderHistory(){
+ const el=document.getElementById('v32history');if(!el)return;el.replaceChildren();
+ const rows=current().slice(-24);const pairs=[];
+ for(let i=0;i<rows.length;i++){
+  const item=rows[i];if(item.role==='user'&&rows[i+1]?.role==='coach'){pairs.push({question:item,answer:rows[++i]});}
+  else pairs.push({question:null,answer:item});
+ }
+ pairs.reverse().forEach((pair,index)=>{
+  const wrap=document.createElement('details');wrap.className='item';wrap.open=index===0;
+  const summary=document.createElement('summary');summary.style.cursor='pointer';summary.style.fontWeight='700';
+  const question=pair.question?.text||'Coach response';
+  summary.textContent=(index===0?'Latest · ':'')+question.slice(0,110)+(question.length>110?'…':'');wrap.append(summary);
+  if(pair.question){const q=document.createElement('p');q.className='tiny muted';q.textContent='You: '+question;wrap.append(q)}
+  const answer=document.createElement('p');answer.style.whiteSpace='pre-wrap';answer.style.lineHeight='1.55';answer.textContent=pair.answer?.text||'';wrap.append(answer);
+  const time=document.createElement('p');time.className='tiny muted';time.textContent=pair.answer?.date||'';wrap.append(time);el.append(wrap);
+ });
+}
+window.formV32Send=async function(){const p=payload(),consent=document.getElementById('v32consent'),status=document.getElementById('v32status'),b=document.getElementById('v32send');if(!p.message)return alert('Enter a question or coaching request.');if(!consent.checked)return alert('Review the exact data and approve this request first.');b.disabled=true;status.textContent='Asking FORM Coach...';try{const r=await fetch('/api/ai/coach',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const x=await r.json();if(!r.ok)throw Error(x.error||'Coach unavailable');if(!x.review||typeof x.review.reply!=='string')throw Error('Invalid coaching reply');const reply=[x.review.reply,...(x.review.suggestions||[]).map(t=>'• '+t)].join('\n\n').slice(0,3800);const before=current().slice();db.coachConversation=[...before,{role:'user',text:p.message,date:TODAY()},{role:'coach',text:reply,date:TODAY()}].slice(-40);if(!save()){db.coachConversation=before;throw Error('Could not save conversation; check storage and export a backup.')}document.getElementById('v32message').value='';status.textContent=(p.mode==='change'?'Requested change reviewed. ':'Coaching response saved. ')+(x.review.changes?.length?'Review the proposed edits below; nothing has been applied.':'No supported structured edits were returned. Check the response for alternatives or missing information.');renderHistory();formV33ShowChanges(x.review.changes||[],p.context.plan);updatePreview()}catch(e){status.textContent=e.message;if(/sign in/i.test(e.message))checkSession()}finally{b.disabled=false}};
 window.formV32Clear=function(){if(!confirm('Clear locally saved AI conversation history? Your goal and check-ins remain.'))return;const old=current().slice();db.coachConversation=[];if(!save()){db.coachConversation=old;return alert('Unable to save change.')}renderHistory();updatePreview()};
 // Replace the placeholder Talk to Coach action. Coach dashboard and other features remain intact.
 
@@ -61,7 +77,7 @@ window.formV33ShowChanges=function(changes,snapshot){
   line.append(check,desc);root.append(line);
  }
  if(pending.length){const btn=document.createElement('button');btn.className='button';btn.textContent='Apply selected changes';btn.onclick=window.formV33Apply;root.append(btn);const note=document.createElement('p');note.className='tiny muted';note.textContent='Changes apply only after approval. Existing completed workouts are never edited. A local rollback snapshot is saved.';root.append(note)}
- else root.textContent='No structured plan changes proposed. You can discuss the guidance without changing your plan.';
+ else root.textContent='No directly applicable changes were proposed. If you requested an unsupported change (such as scheduling, cardio or exercise swaps), FORM should explain the limitation and offer a plan to implement it; it cannot apply those edits yet.';
 };
 window.formV33Apply=function(){
  const root=document.getElementById('v33proposals');const picks=[...root.querySelectorAll('input[data-v33-index]:checked')].map(e=>pending[Number(e.dataset.v33Index)]).filter(Boolean);
