@@ -23,7 +23,14 @@ export async function onRequest(context){
  const authenticated=!!(record&&record.exp>Date.now());
  if(path==='/form-login'&&request.method==='GET')return authenticated?new Response(null,{status:303,headers:{Location:'/', 'Cache-Control':'no-store'}}):html(page);
  if(path==='/form-login'&&request.method==='POST'){
-  if(request.headers.get('Origin')!==url.origin)return json({error:'Origin rejected'},403);
+  const origin=request.headers.get('Origin');
+const referer=request.headers.get('Referer');
+const sameOrigin=origin
+  ? origin===url.origin
+  : referer
+    ? new URL(referer).origin===url.origin
+    : false;
+if(!sameOrigin)return json({error:'Origin rejected'},403);
   const data=await request.formData();const password=data.get('password');
   if(typeof password!=='string'||password.length>256||!password)return html(page,400);
   const ip=request.headers.get('CF-Connecting-IP')||'unknown';
@@ -36,7 +43,14 @@ export async function onRequest(context){
   return new Response(null,{status:303,headers:{Location:'/', 'Set-Cookie':cookieName+'='+id+cookieAttrs+'; Max-Age='+expiry,'Cache-Control':'no-store'}});
  }
  if(path==='/form-logout'&&request.method==='POST'){
-  if(request.headers.get('Origin')!==url.origin)return json({error:'Origin rejected'},403);
+  const origin=request.headers.get('Origin');
+const referer=request.headers.get('Referer');
+const sameOrigin=origin
+  ? origin===url.origin
+  : referer
+    ? new URL(referer).origin===url.origin
+    : false;
+if(!sameOrigin)return json({error:'Origin rejected'},403);
   if(key)await env.FORM_AUTH_SESSIONS.delete(key);
   return new Response(null,{status:303,headers:{Location:'/form-login','Set-Cookie':cookieName+'='+cookieAttrs+'; Max-Age=0','Cache-Control':'no-store','Clear-Site-Data':'"cache"'}});
  }
