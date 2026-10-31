@@ -1,10 +1,9 @@
-const CACHE='form-v3.7.1-smart-nutrition-test';const ASSETS=['./','./index.html','./app.js','./upgrade.js','./generator.js','./split.js','./personal-library.js','./workout-ui.js','./checkins.js','./progress-unified.js','./checkin-layout.js','./form-settings.js','./photo-privacy.js',
-'./settings-refinements.js','./accent-only-fix.js','./form-v21.js',
-'./brand-v21.js','./library-v22.js',
-'./brand-v22.js','./brand-exact.js',
-'./form-logo.png',
-'./form-icon-180.png',
-'./form-icon-512.png','./icon.svg','./form-v213.js','./form-ai-v22.js','./form-ai-checkins-v23.js','./form-ai-training-v24.js','./form-ai-program-v25.js','./form-coach-v30.js','./form-coach-consolidated-v31.js','./form-coach-v32.js','./form-stability-v332.js','./form-interface-v3321.js','./form-coach-checkin-v3322.js','./form-coach-merged-v3323.js','./form-universal-workouts.js','./form-unified-plan-v35.js',
-'./form-manual-program-v35.js','./form-train-navigation-v352.js','./form-v353-ai-workout-visibility.js','./form-ai-workout-logger-v354.js','./form-ai-original-logger-bridge-v355.js','./form-ai-logger-finish-fix-v356.js','./form-ai-mixed-original-v357.js','./form-ai-activity-layout-v358.js','./form-ai-permanent-add-v359.js','./form-ai-warmup-discard-v360.js',
-'./form-coach-preferences-v361.js','./form-nutrition-coach-v37.js',
-'./form-personal-context-v371.js','./manifest.webmanifest'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('form-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&new URL(e.request.url).origin===self.location.origin)e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))});
+// FORM v3.8 test - migration away from offline app shell caching.
+// Network-only service worker: do not cache private app pages or scripts.
+self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  const keys = await caches.keys();
+  await Promise.all(keys.filter(key => key.startsWith('form-')).map(key => caches.delete(key)));
+  await self.clients.claim();
+})()));
+// No fetch interception: every navigation and asset request goes to the server.
