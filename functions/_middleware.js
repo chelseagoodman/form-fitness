@@ -69,6 +69,18 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   if(request.method!=='POST')return json({error:'Method not allowed'},405);
   const origin=request.headers.get('Origin');
   if(origin!==url.origin)return json({error:'Origin rejected'},403);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const bucket = Math.floor(Date.now() / 60000);
+  const rateKey = 'passkey-rate:' + await sha(ip + ':' + bucket);
+
+  const count = Number(await env.FORM_AUTH_SESSIONS.get(rateKey) || 0);
+  if (count >= 10)
+    return json({error:'Too many attempts. Try again shortly.'},429);
+
+  await env.FORM_AUTH_SESSIONS.put(
+    rateKey, String(count + 1), {expirationTtl:120}
+  );
+
   return next();
  }
  if(!authenticated){

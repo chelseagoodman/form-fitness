@@ -10,7 +10,7 @@ import {
   registrationVerify,
   authenticationOptions,
   authenticationVerify,
-} from '../../src/passkey-core.js';
+} from '../../functions/_lib/passkey-core.js';
 
 // Simulated D1 database for isolated security tests.
 class MockD1 {
