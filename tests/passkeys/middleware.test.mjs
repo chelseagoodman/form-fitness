@@ -15,12 +15,22 @@ const env = {
     async put(key, value) { kv.set(key, value); },
     async delete(key) { kv.delete(key); }
   },
+  FORM_PASSKEY_DB: {
+    prepare() {
+      return {
+        bind() { return this; },
+        async first() { return { attempts: 1 }; }
+      };
+    }
+  },
   FORM_AI: { async fetch() { return Response.json({ok: true}); } },
   FORM_AI_SERVICE_SECRET: 'local-only-placeholder-not-a-real-secret-123456789'
 };
 let nextCalls = 0;
 async function request(path, { method = 'GET', cookie = '', originHeader = null, body = null } = {}) {
-  const headers = {};
+  const headers = {
+    'CF-Connecting-IP': '192.0.2.10'
+  };
   if (cookie) headers.Cookie = cookie;
   if (originHeader) headers.Origin = originHeader;
   if (body) headers['Content-Type'] = 'application/json';

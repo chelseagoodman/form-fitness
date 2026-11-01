@@ -9,7 +9,7 @@ const fail=(message,status=400)=>response({error:message},status);
 const limit=(s,n)=>typeof s==='string'&&s.length<=n;
 const userId='form-owner';
 const expire=5*60*1000;
-function settings(req){const url=new URL(req.url);if(url.protocol!=='https:')throw Error('HTTPS required');return {rpID:url.hostname,origin:url.origin}}
+function settings(req){const url=new URL(req.url);if(url.protocol!=='https:' && !(url.protocol==='http:' && ['localhost','127.0.0.1'].includes(url.hostname)))throw Error('HTTPS required');return {rpID:url.hostname,origin:url.origin}}
 async function storeChallenge(db,purpose,challenge){const token=random();await db.prepare('INSERT INTO passkey_challenges (token_hash,challenge,purpose,user_id,expires_at) VALUES (?,?,?,?,?)').bind(await hash(token),challenge,purpose,userId,Date.now()+expire).run();return token}
 async function consumeChallenge(db,token,purpose){if(!limit(token,128)||!token)return null;const row=await db.prepare('DELETE FROM passkey_challenges WHERE token_hash=? AND purpose=? RETURNING challenge,expires_at,user_id').bind(await hash(token),purpose).first();return row&&row.expires_at>Date.now()&&row.user_id===userId?row.challenge:null}
 const bytes=x=>Uint8Array.from(x);

@@ -69,17 +69,25 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   if(request.method!=='POST')return json({error:'Method not allowed'},405);
   const origin=request.headers.get('Origin');
   if(origin!==url.origin)return json({error:'Origin rejected'},403);
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!env.FORM_PASSKEY_DB)
+    return json({error:'Passkey rate limiter unavailable'},503);
+
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (!ip)
+    return json({error:'Client identity unavailable'},503);
+
   const bucket = Math.floor(Date.now() / 60000);
-  const rateKey = 'passkey-rate:' + await sha(ip + ':' + bucket);
+  const rateKey = await sha(ip + ':' + bucket);
 
-  const count = Number(await env.FORM_AUTH_SESSIONS.get(rateKey) || 0);
-  if (count >= 10)
+  const result = await env.FORM_PASSKEY_DB.prepare(
+    `INSERT INTO passkey_rate_limits (rate_key, attempts, expires_at)
+     VALUES (?, 1, ?)
+     ON CONFLICT(rate_key) DO UPDATE SET attempts = attempts + 1
+     RETURNING attempts`
+  ).bind(rateKey, Date.now() + 120000).first();
+
+  if (!result || result.attempts > 10)
     return json({error:'Too many attempts. Try again shortly.'},429);
-
-  await env.FORM_AUTH_SESSIONS.put(
-    rateKey, String(count + 1), {expirationTtl:120}
-  );
 
   return next();
  }
