@@ -4,3 +4,6 @@ dist/
 apply-login-passkey-ui.py
 apply-passkey-routing.py
 functions/_middleware.backup.js
+
+tests/passkeys/mock-worker/
+wrangler.jsonc
