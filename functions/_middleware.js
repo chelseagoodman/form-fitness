@@ -54,6 +54,14 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   if(key)await env.FORM_AUTH_SESSIONS.delete(key);
   return new Response(null,{status:303,headers:{Location:'/form-login','Set-Cookie':cookieName+'='+cookieAttrs+'; Max-Age=0','Cache-Control':'no-store','Clear-Site-Data':'"cache"'}});
  }
+ // Only passkey authentication is public; registration, listing and revocation
+ // remain protected by the existing FORM session check below.
+ if(path==='/api/passkeys/authenticate-options' || path==='/api/passkeys/authenticate-verify'){
+  if(request.method!=='POST')return json({error:'Method not allowed'},405);
+  const origin=request.headers.get('Origin');
+  if(origin!==url.origin)return json({error:'Origin rejected'},403);
+  return next();
+ }
  if(!authenticated){
   if(path.startsWith('/api/'))return json({error:'Sign in to FORM'},401);
   return new Response(null,{status:303,headers:{Location:'/form-login','Cache-Control':'no-store'}});
