@@ -122,8 +122,9 @@ function renderWorkout(){
   }).join(''):'<p class="tiny muted">Expand to log each alternating round.</p>'}
   ${block.members.map(g=>`<div class="form-superset-actions"><span class="tiny muted">${safeText(g.name)}</span>${exerciseActions(g,g.index,groups)}</div>`).join('')}</section>`;
  }).join('')}
- <div class="actions"><button class="button secondary" onclick="formAddDuringWorkout()">+ Add exercise</button><button class="button" onclick="finishSession()">Finish & save</button><button class="button secondary" onclick="formKeepDraft()">Save & close</button><button class="button danger" onclick="formDiscardDraft()">Discard draft</button></div>`;
+ <div class="actions"><button class="button secondary" onclick="formAddDuringWorkout()">+ Add exercise</button><button class="button" onclick="finishSession()">Finish & save</button><button class="button danger" onclick="formDiscardDraft()">Discard draft</button></div>`;
  $('modalContent').innerHTML=html;
+ $('modal').dataset.formWorkoutOpen='true';
 }
 window.formToggleCard=function(i){if(openCards.has(i))openCards.delete(i);else openCards.add(i);renderWorkout()};
 window.formDraftValue=function(i,k,v){if(!sessionDraft?.sets[i])return;sessionDraft.sets[i][k]=Math.max(0,Number(v)||0);persist()};
@@ -223,5 +224,21 @@ finishSession=function(){
 };
 const oldTrain=train;
 train=function(){let html=oldTrain();if(localStorage.getItem(DRAFT_KEY))html=`<div class="card"><h2>Unfinished workout</h2><p class="muted">Your last workout was saved automatically.</p><button class="button" onclick="formResumeDraft()">Resume workout</button></div>`+html;return html};
-window.formResumeDraft=function(){try{const x=JSON.parse(localStorage.getItem(DRAFT_KEY));sessionDraft=x.draft;done=x.done||[];openCards=new Set([0]);modal('<h2>Loading workout…</h2>');editSession()}catch{alert('Could not restore workout draft. Your completed sessions are unaffected.')}};
+window.formResumeDraft=function(){try{const x=JSON.parse(localStorage.getItem(DRAFT_KEY));sessionDraft=x.draft;done=x.done||[];openCards=new Set([0]);const dialog=$('modal');if(dialog.open)$('modalContent').innerHTML='<h2>Loading workout…</h2>';else modal('<h2>Loading workout…</h2>');editSession()}catch{alert('Could not restore workout draft. Your completed sessions are unaffected.')}};
+window.formKeepWorkoutForLater=function(){close();render()};
+
+// A regular modal clears the workout marker. renderWorkout sets it again after
+// drawing the active session, so closing that session can offer an immediate resume.
+const previousModal=modal;
+modal=function(){const result=previousModal.apply(this,arguments);$('modal').dataset.formWorkoutOpen='false';return result};
+const workoutDialog=$('modal');
+workoutDialog.addEventListener('close',function(){
+ if(workoutDialog.dataset.formWorkoutOpen!=='true')return;
+ workoutDialog.dataset.formWorkoutOpen='false';
+ if(!localStorage.getItem(DRAFT_KEY)||document.visibilityState==='hidden')return;
+ setTimeout(function(){
+  if(workoutDialog.open||!localStorage.getItem(DRAFT_KEY)||document.visibilityState==='hidden')return;
+  modal('<h2>Unfinished workout</h2><p class="muted">Your workout has been saved on this device.</p><div class="actions"><button class="button" onclick="formResumeDraft()">Resume workout</button><button class="button secondary" onclick="formKeepWorkoutForLater()">Keep for later</button></div>');
+ },0);
+});
 })();

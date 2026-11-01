@@ -3,6 +3,4 @@
 <rect width="512" height="512" rx="112" fill="#101312"/>
 <rect x="15" y="15" width="482" height="482" rx="100" fill="none" stroke="#8B6A31" stroke-width="5"/>
 <path d="M104 108H413L368 177H189V250H329L288 319H189V420H104Z" fill="url(#gold)"/>
-<path d="M195 266C239 215 281 216 304 241C332 192 392 196 414 236C435 275 411 319 382 337C348 358 315 353 293 336C261 361 223 358 195 334Z" fill="url(#gold)"/>
-<path d="M293 276C328 253 358 264 370 288" stroke="#101312" stroke-width="15" fill="none" stroke-linecap="round"/>
 </svg>
