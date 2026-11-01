@@ -82,6 +82,17 @@
       trainingCard.classList.add('form-v384-training-subsection');
       profile.append(trainingCard);
     }
+
+    // Keep the Settings title and Home button first, with the profile card below.
+    const settingsHeader = [...root.querySelectorAll('.row')].find(row => {
+      const title = row.querySelector('h1');
+      const hasHomeButton = [...row.querySelectorAll('button')]
+        .some(button => /home/i.test(button.textContent));
+      return text(title) === 'settings' && hasHomeButton;
+    });
+    if (settingsHeader && settingsHeader.nextElementSibling !== profile) {
+      settingsHeader.insertAdjacentElement('afterend', profile);
+    }
   }
 
   const previousRender = window.render;
