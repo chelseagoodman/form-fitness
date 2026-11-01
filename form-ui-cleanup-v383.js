@@ -164,7 +164,13 @@
       logout.remove();
     }
 
-    root.prepend(card);
+    const settingsHeader = [...root.querySelectorAll('.row')].find(row => {
+      const heading = row.querySelector('h1');
+      const hasHomeButton = [...row.querySelectorAll('button')].some(button => /home/i.test(button.textContent));
+      return heading?.textContent.trim().toLowerCase() === 'settings' && hasHomeButton;
+    });
+    if (settingsHeader) settingsHeader.insertAdjacentElement('afterend', card);
+    else root.prepend(card);
   }
 
   const previousCoach = coach;
