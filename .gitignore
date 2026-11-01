@@ -1,2 +1,6 @@
 node_modules/
 dist/
+.wrangler/
+apply-login-passkey-ui.py
+apply-passkey-routing.py
+functions/_middleware.backup.js
