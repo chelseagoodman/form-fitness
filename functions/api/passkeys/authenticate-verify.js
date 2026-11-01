@@ -1,5 +1,5 @@
 // FORM v3.8.2 development branch only. Never deploy without middleware routing tests.
-import { authenticationVerify } from '../../../src/passkey-core.js';
+import { authenticationVerify } from '../../_lib/passkey-core.js';
 
 const encoder = new TextEncoder();
 const EXPIRY_SECONDS = 30 * 24 * 60 * 60;

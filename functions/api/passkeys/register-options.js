@@ -1,5 +1,5 @@
 
-import { registrationOptions } from '../../../src/passkey-core.js';
+import { registrationOptions } from '../../_lib/passkey-core.js';
 
 export async function onRequestPost({ request, env }) {
   const url = new URL(request.url);

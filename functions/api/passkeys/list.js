@@ -1,4 +1,4 @@
-import { listPasskeys } from '../../../src/passkey-core.js';
+import { listPasskeys } from '../../_lib/passkey-core.js';
 
 export async function onRequestGet({ request, env }) {
   if (!env.FORM_PASSKEY_DB) {

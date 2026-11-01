@@ -1,4 +1,4 @@
-import { revokePasskey } from '../../../src/passkey-core.js';
+import { revokePasskey } from '../../_lib/passkey-core.js';
 
 export async function onRequestPost({ request, env }) {
   if (request.headers.get('Origin') !== new URL(request.url).origin) {
