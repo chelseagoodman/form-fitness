@@ -28,8 +28,8 @@ export async function onRequest({request,env,params}){
    const response=await internal(env,'auth',{password:data.password},request.headers.get('CF-Connecting-IP'));
    if(!response.ok)return json({error:'Login service unavailable'},502);
    const result=await response.json();if(!result.ok)return json({error:'Incorrect password'},401);
-   const p=b64(enc.encode(JSON.stringify({v:1,exp:Date.now()+12*3600000})));
-   return json({ok:true},200,{'Set-Cookie':'form_ai_test_session='+p+'.'+await sign(env.FORM_AI_SERVICE_SECRET,p)+'; '+cookieBase+'; Max-Age=43200'});
+   const p=b64(enc.encode(JSON.stringify({v:1,exp:Date.now()+7*24*3600000})));
+   return json({ok:true},200,{'Set-Cookie':'form_ai_test_session='+p+'.'+await sign(env.FORM_AI_SERVICE_SECRET,p)+'; '+cookieBase+'; Max-Age=604800'});
   }
   if(!await valid(request,env.FORM_AI_SERVICE_SECRET))return json({error:'Please sign in to FORM AI'},401);
   const ip=request.headers.get('CF-Connecting-IP');
