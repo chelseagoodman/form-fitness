@@ -100,6 +100,16 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
 
   return next();
  }
+ // Public brand assets and the PWA manifest must load before FORM sign-in.
+ const publicBrandAssets=new Set(['/form-icon-180-v385.png','/form-icon-512-v385.png','/icon.svg','/manifest.webmanifest']);
+ if(publicBrandAssets.has(path)){
+  if(request.method!=='GET'&&request.method!=='HEAD')return json({error:'Method not allowed'},405);
+  const response=await next();
+  const headers=new Headers(response.headers);
+  headers.set('Cache-Control',path==='/manifest.webmanifest'?'public, max-age=300':'public, max-age=31536000, immutable');
+  headers.set('X-Content-Type-Options','nosniff');
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+ }
  if(!authenticated){
   if(path.startsWith('/api/'))return json({error:'Sign in to FORM'},401);
   return new Response(null,{status:303,headers:{Location:'/form-login','Cache-Control':'no-store'}});
