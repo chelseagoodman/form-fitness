@@ -4,7 +4,7 @@
 function applyExactBrand(){
  const brand=document.querySelector('header .brand');
  if(!brand)return;
- brand.innerHTML='<img src="./form-logo-v385.png" alt="FORM" style="display:block;width:min(280px,65vw);height:auto;object-fit:contain">';
+ brand.innerHTML='<img src="./form-logo-v387.png" alt="FORM" style="display:block;width:min(280px,65vw);height:auto;object-fit:contain">';
  brand.style.lineHeight='1';
 }
 const previousRender=render;
