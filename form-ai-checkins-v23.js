@@ -15,12 +15,12 @@ function build(includeCycle){
   const sets=Array.isArray(s.sets)?s.sets:[];const rir=sets.map(x=>n(x.rir)).filter(x=>x!==null&&x>=0&&x<=10);
   return {date:s.date.slice(0,10),sets:Math.min(500,sets.length),durationMinutes:Math.max(0,Math.min(1000,Math.round((n(s.durationSeconds)||0)/60))),...(rir.length?{averageRir:Math.round(rir.reduce((a,b)=>a+b,0)/rir.length*10)/10}:{})};
  });
- const goal=String(db.profile?.goal||'not specified').slice(0,40);
+ const goal=String(db.coachGoal?.goal||db.profile?.goal||'not specified').slice(0,500);
  return {checkins,training,goal};
 }
 window.formV23Open=function(){
  if(!(db.checkins||[]).length)return alert('Add a check-in in Progress first.');
- modal(`<h2>AI check-in review · Test</h2><p class="tiny muted">Only numerical values and dates shown in the preview are shared with Gemini after you approve. Progress photos, scans, notes, your name and exercise names are excluded.</p>
+ modal(`<h2>AI check-in review · Test</h2><p class="tiny muted">Your saved Coach goal text and the numerical values and dates shown in the preview are shared with Gemini only after you approve. Progress photos, scans, notes, your name and exercise names are excluded.</p>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v23cycle" style="width:auto" onchange="formV23Preview()">Include menstrual cycle day (sensitive, optional)</label>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v23consent" style="width:auto">I agree to send the previewed numerical information to Gemini for this analysis</label>
  <details open style="margin:12px 0"><summary style="cursor:pointer;padding:10px 0">Review exact information to be shared (expand / collapse)</summary><pre id="v23payload" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;min-height:120px;overflow:auto;background:#14201a;border:1px solid #42594b;border-radius:10px;padding:12px;font-size:12px"></pre></details>
@@ -37,8 +37,8 @@ window.formV23Analyse=async function(){
  status.textContent='Analysing check-in trends...';host.replaceChildren();
  try{const r=await fetch(endpoint,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  const data=await r.json();if(!r.ok)throw Error(data.error||'Analysis failed');
- const review=data.review;if(!review||typeof review.summary!=='string')throw Error('Unexpected AI response');
- const h=document.createElement('h3');h.textContent='Review — suggestions only';host.append(h);
+ const review=data.review;if(!review||typeof review.summary!=='string')throw Error('Unexpected AI response');if(!(review.goalProgressPercent===null||(Number.isInteger(review.goalProgressPercent)&&review.goalProgressPercent>=0&&review.goalProgressPercent<=100))||!['low','medium','high'].includes(review.goalProgressConfidence)||typeof review.goalProgressNote!=='string'||review.goalProgressNote.length>600)throw Error('Unexpected AI goal progress response');const previous=db.goalProgress?.goal===payload.goal&&Number.isInteger(db.goalProgress?.percent)?db.goalProgress.percent:null;const percent=review.goalProgressPercent;db.goalProgress={goal:payload.goal,percent,previousPercent:previous,change:percent!==null&&previous!==null?percent-previous:null,confidence:review.goalProgressConfidence,note:review.goalProgressNote,updatedAt:new Date().toISOString()};save();
+ const scoreHeading=document.createElement('h3');scoreHeading.textContent='Progress toward your Coach goal';host.append(scoreHeading);const scoreText=document.createElement('p');scoreText.textContent=percent===null?'Not enough information for a reliable percentage yet. '+review.goalProgressNote:percent+'% · '+review.goalProgressConfidence+' confidence'+(db.goalProgress.change===null?'':' · '+(db.goalProgress.change>0?'+':'')+db.goalProgress.change+' points since the previous review');host.append(scoreText);const scoreNote=document.createElement('p');scoreNote.className='tiny muted';scoreNote.textContent='Approximate AI estimate based on available check-ins, not a precise measurement.';host.append(scoreNote);const h=document.createElement('h3');h.textContent='Review — suggestions only';host.append(h);
  const p=document.createElement('p');p.textContent=review.summary;host.append(p);
  for(const [key,label] of [['trends','Body composition & trends'],['recovery','Recovery & lifestyle'],['cycleInsights','Cycle insights'],['nutrition','Nutrition recommendations'],['training','Training recommendations'],['uncertainties','Limitations']]){
   const title=document.createElement('h3');title.textContent=label;host.append(title);const ul=document.createElement('ul');const lines=review[key]||[];if(key==='cycleInsights'&&!lines.length){const note=document.createElement('p');note.textContent=payload.checkins.some(x=>x.cycle!==undefined)?'No reliable personal cycle pattern established from the available check-ins.':'Cycle data was not shared for this review.';host.append(note)}for(const line of lines.slice(0,5)){const li=document.createElement('li');li.textContent=String(line);ul.append(li)}host.append(ul);
@@ -47,3 +47,4 @@ window.formV23Analyse=async function(){
  }catch(e){status.textContent=e.message||'Could not analyse check-in.'}finally{if(button)button.disabled=false}
 };
 })();
+
