@@ -13,6 +13,9 @@ function meta(){return read(META,{})}
 function isCardio(name,explicit){
  if(explicit==='cardio')return true;
  if(explicit==='strength')return false;
+ const routineExercise=(db.routines||[]).find(r=>r.id===sessionDraft?.routineId)?.exercises?.find(x=>norm(x.name)===norm(name));
+ if(routineExercise?.activityType==='cardio')return true;
+ if(routineExercise?.activityType==='strength')return false;
  const entry=meta()[norm(name)];
  if(entry?.type==='cardio')return true;
  if(entry?.type==='strength')return false;

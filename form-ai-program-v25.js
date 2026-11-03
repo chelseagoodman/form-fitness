@@ -28,6 +28,34 @@ window.formV25Generate=async function(){if(!document.getElementById('v25consent'
 // Editing is local: it never sends edited values back to Gemini.
 function v25el(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(cls)e.className=cls;return e}
 function v25field(label,value,kind,onchange){const wrap=v25el('label',label);wrap.style.cssText='display:block;margin:8px 0;font-size:12px';const input=document.createElement('input');input.type=kind||'text';input.value=value??'';input.style.cssText='display:block;width:100%;min-width:0;margin-top:4px';if(kind==='number'){input.min='0';input.step='any'}input.addEventListener('change',()=>onchange(input.value));wrap.append(input);return wrap}
+function v25AddLibraryExercise(routineIndex){
+ const routine=proposal?.routines?.[routineIndex];if(!routine)return;
+ const section=[...document.querySelectorAll('#v25result .v25-routine')][routineIndex];if(!section)return;
+ const old=section.querySelector('.v25-library-picker');if(old){old.remove();return}
+ const all=[...(typeof FORM_EXERCISES!=='undefined'?FORM_EXERCISES:[]),...(typeof FORM_PERSONAL_EXERCISES!=='undefined'?FORM_PERSONAL_EXERCISES:[]),...(Array.isArray(db.exerciseLibrary)?db.exerciseLibrary:[])];
+ const unique=new Map();for(const item of all){const name=Array.isArray(item)?item[0]:item?.name;if(typeof name!=='string'||!name.trim())continue;const key=name.trim().toLowerCase();if(!unique.has(key))unique.set(key,name.trim())}
+ const current=new Set((routine.exercises||[]).map(x=>String(x.name||'').trim().toLowerCase()));
+ const choices=[...unique.values()].filter(name=>!current.has(name.toLowerCase())).sort((a,b)=>a.localeCompare(b));
+ if(!choices.length)return alert('Every exercise in your library is already in this routine.');
+ const metadata=(()=>{try{return JSON.parse(localStorage.getItem('form-v21-exercise-meta')||'{}')}catch{return {}}})();
+ const picker=v25el('div',undefined,'item v25-library-picker');picker.style.cssText='margin-top:10px;border:1px solid #405447;border-radius:12px;padding:12px';
+ const label=v25el('label','Choose an exercise from your library');label.style.cssText='display:block';
+ const select=document.createElement('select');select.style.cssText='display:block;width:100%;margin-top:6px';
+ for(const name of choices){const option=document.createElement('option');option.value=name;const type=metadata[name.toLowerCase()]?.type==='cardio'?'Cardio':'Strength';option.textContent=type+' · '+name;select.append(option)}
+ label.append(select);picker.append(label);
+ picker.append(v25el('p','It will be added to this AI routine. You can adjust its sets and targets before saving. Cardio exercises use the cardio logger during workouts.','tiny muted'));
+ const add=v25el('button','Add selected exercise','button');add.type='button';add.onclick=()=>{
+  const name=select.value;if(!name)return;
+  if((routine.exercises||[]).some(x=>String(x.name||'').trim().toLowerCase()===name.toLowerCase()))return alert('That exercise is already in this routine.');
+  const previous=v25selected();
+  routine.exercises.push({name,sets:3,reps:10,targetRir:2,suggestedWeightKg:null,amrap:false,tempo:'',supersetGroup:null,rationale:'Added from your exercise library'});
+  formV25Render();
+  const sections=[...document.querySelectorAll('#v25result .v25-routine')];
+  for(const row of previous){const target=sections[row.i];if(!target)continue;const routineCheck=target.querySelector('.v25-include-routine');if(routineCheck)routineCheck.checked=row.enabled;const exerciseChecks=[...target.querySelectorAll('.v25-include-exercise')];for(const item of row.exercises){if(exerciseChecks[item.j])exerciseChecks[item.j].checked=item.enabled}}
+  v25Count();
+ };
+ picker.append(add);section.append(picker);
+}
 function v25selected(){return [...document.querySelectorAll('#v25result .v25-routine')].map((section,i)=>({i,enabled:section.querySelector('.v25-include-routine').checked,exercises:[...section.querySelectorAll('.v25-exercise')].map((line,j)=>({j,enabled:line.querySelector('.v25-include-exercise').checked}))}))}
 window.formV25Render=function(){const host=document.getElementById('v25result');if(!host||!proposal)return;host.replaceChildren();host.append(v25el('h3','Proposed program — '+proposal.weeks+' weeks'));host.append(v25el('p',proposal.summary+' '+proposal.rationale));host.append(v25el('p','Progression: '+proposal.progressionRule));
  const actions=v25el('div');actions.className='actions';const all=v25el('button','Select all routines','button secondary');all.type='button';all.onclick=()=>{host.querySelectorAll('.v25-include-routine,.v25-include-exercise').forEach(c=>c.checked=true);v25Count()};actions.append(all);host.append(actions);
@@ -39,7 +67,7 @@ window.formV25Render=function(){const host=document.getElementById('v25result');
  for(const [label,key,min,max] of [['Sets','sets',1,8],['Reps','reps',1,30],['Target RIR','targetRir',0,5],['Suggested kg (blank = unknown)','suggestedWeightKg',0,1500]]){grid.append(v25field(label,x[key]??'','number',v=>{if(v===''&&key==='suggestedWeightKg'){x[key]=null;return}const n=Number(v);if(Number.isFinite(n)&&n>=min&&n<=max)x[key]=key==='suggestedWeightKg'?n:Math.round(n)}))}line.append(grid);
  const toggles=v25el('div');toggles.style.cssText='display:flex;gap:14px;flex-wrap:wrap';const am=v25el('label','AMRAP ');const amCheck=document.createElement('input');amCheck.type='checkbox';amCheck.checked=!!x.amrap;amCheck.onchange=()=>x.amrap=amCheck.checked;am.append(amCheck);toggles.append(am);line.append(toggles);
  line.append(v25field('Tempo (optional)',x.tempo||'','text',v=>x.tempo=v.slice(0,50)));line.append(v25field('Superset group (blank = straight sets)',x.supersetGroup||'','text',v=>x.supersetGroup=v.trim().slice(0,12)||null));line.append(v25el('p',x.rationale||'','tiny muted'));section.append(line)});
- host.append(section)});
+ const addLibrary=v25el('button','+ Add from Exercise Library','button secondary');addLibrary.type='button';addLibrary.onclick=()=>v25AddLibraryExercise(i);section.append(addLibrary);host.append(section)});
  const footer=v25el('div',undefined,'card');const count=v25el('p','', 'tiny');count.id='v25selection-count';footer.append(count);const saveAll=v25el('button','Save selected routines as ONE program','button');saveAll.id='v25-save-all';saveAll.type='button';saveAll.onclick=()=>window.formV25SaveAll();footer.append(saveAll);footer.append(v25el('p','All selected routines are saved in one operation. Existing routines and completed workout history are not overwritten. Suggested weights are metadata, not automatically loaded into the workout screen.','tiny muted'));host.append(footer);v25Count()};
 function v25Count(){const groups=v25selected();const count=groups.filter(r=>r.enabled&&r.exercises.some(x=>x.enabled)).length;const el=document.getElementById('v25selection-count');if(el)el.textContent=count+' of '+groups.length+' routines selected';const button=document.getElementById('v25-save-all');if(button)button.disabled=!count}
 function v25checkExercise(x){return x&&typeof x.name==='string'&&x.name.trim().length>0&&x.name.length<=90&&Number.isInteger(x.sets)&&x.sets>=1&&x.sets<=8&&Number.isInteger(x.reps)&&x.reps>=1&&x.reps<=30&&Number.isInteger(x.targetRir)&&x.targetRir>=0&&x.targetRir<=5&&(x.suggestedWeightKg===null||(typeof x.suggestedWeightKg==='number'&&Number.isFinite(x.suggestedWeightKg)&&x.suggestedWeightKg>=0&&x.suggestedWeightKg<=1500))}
