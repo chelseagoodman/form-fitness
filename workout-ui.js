@@ -100,8 +100,21 @@ window.formDraftRIR=function(i,value){
 };
 function setHeader(){return '<div class="workout-set-grid workout-set-head"><span>Set</span><span>Previous</span><span>kg</span><span>Reps</span><span>Done</span></div>'}
 function exerciseActions(g,index,groups){
- return `<div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formSwapExercise(${index})">Swap</button><button class="button secondary small" onclick="formPairExercise(${index})">Pair</button>${g.superset?`<button class="button secondary small" onclick="formUnpairExercise(${index})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${index},-1)" ${index===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${index},1)" ${index===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${index})">Remove</button></div>`;
+ return `<div class="actions" style="margin:10px 0"><button class="button secondary small" onclick="formAddWorkoutSet(${index})">+ Add set</button><button class="button secondary small" onclick="formSwapExercise(${index})">Swap</button><button class="button secondary small" onclick="formPairExercise(${index})">Pair</button>${g.superset?`<button class="button secondary small" onclick="formUnpairExercise(${index})">Unpair</button>`:''}<button class="button secondary small" onclick="formMoveExercise(${index},-1)" ${index===0?'disabled':''}>↑</button><button class="button secondary small" onclick="formMoveExercise(${index},1)" ${index===groups.length-1?'disabled':''}>↓</button><button class="button secondary small" onclick="formRemoveExercise(${index})">Remove</button></div>`;
 }
+window.formAddWorkoutSet=function(index){
+ if(!sessionDraft)return;
+ const group=exerciseGroups()[index];
+ if(!group)return;
+ if(group.sets.length>=12)return alert('A maximum of 12 sets per exercise is supported in one workout.');
+ const last=group.sets[group.sets.length-1];
+ sessionDraft.sets.push({exercise:group.name,set:group.sets.length+1,reps:Number(last?.reps)||group.reps||10,weight:Number(last?.weight)||0,rir:last?.rir??null});
+ done.push(false);
+ const blockIndex=workoutBlocks(exerciseGroups()).findIndex(block=>block.members.some(member=>member.index===index));
+ if(blockIndex>=0)openCards.add(blockIndex);
+ persist();
+ renderWorkout();
+};
 function renderWorkout(){
  if(!sessionDraft)return;
  const groups=exerciseGroups(),blocks=workoutBlocks(groups);

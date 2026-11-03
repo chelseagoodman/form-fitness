@@ -101,7 +101,7 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   return next();
  }
  // Public brand assets and the PWA manifest must load before FORM sign-in.
- const publicBrandAssets=new Set(['/form-icon-180-v389.png','/form-icon-512-v389.png','/icon.svg','/manifest.webmanifest']);
+ const publicBrandAssets=new Set(['/form-icon-192-v389.png','/form-icon-180-v389.png','/form-icon-512-v389.png','/icon.svg','/manifest.webmanifest']);
  if(publicBrandAssets.has(path)){
   if(request.method!=='GET'&&request.method!=='HEAD')return json({error:'Method not allowed'},405);
   const response=await next();
