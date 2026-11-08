@@ -23,11 +23,11 @@
     return db[SAVED];
   }
 
-  function addSavedFood(food) {
+  function addSavedFood(food, askFirst = true) {
     const name = String(food?.name || '').trim();
     const k = key(name);
-    if (!k || savedFoods().some(item => key(item.name) === k)) return;
-    if (!confirm('Also add “' + name + '” to Saved Foods / Quick Add? It will stay in today’s diary either way.')) return;
+    if (!k || savedFoods().some(item => key(item.name) === k)) return true;
+    if (askFirst && !confirm('Also add “' + name + '” to Saved Foods / Quick Add? It will stay in today’s diary either way.')) return false;
 
     const previous = db[SAVED].slice();
     const oldHidden = Array.isArray(db[HIDDEN]) ? db[HIDDEN].slice() : [];
@@ -37,10 +37,14 @@
       db[SAVED] = previous;
       db[HIDDEN] = oldHidden;
       alert('The food was logged, but could not be added to Saved Foods.');
-      return;
+      return false;
     }
     window.formQuickFoodRender?.();
+    return true;
   }
+
+  // Used when another screen already asks the user to choose whether to save.
+  window.formSavedFoodAdd=function(food){return addSavedFood(food,false)};
 
   // Existing logged foods stay available. Newly logged foods trigger a
   // separate opt-in after the diary save succeeds.
