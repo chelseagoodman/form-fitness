@@ -24,10 +24,14 @@ function isCardio(name,explicit){
 function setIsCardio(set){return set?.activityType==='cardio'||(set?.activityType!=='strength'&&isCardio(set?.exercise))}
 function saveType(name,type){
  const data=meta(),key=norm(name);
- if(!key)return;
+ if(!key||!['cardio','strength'].includes(type))return;
  data[key]={...(data[key]||{}),type};
  localStorage.setItem(META,JSON.stringify(data));
+ let changed=false;
+ for(const routine of db.routines||[])for(const exercise of routine.exercises||[])if(norm(exercise.name)===key&&exercise.activityType!==type){exercise.activityType=type;changed=true}
+ if(changed&&typeof save==='function')save();
 }
+window.formV391SaveExerciseType=saveType;
 function addTypeControl(container,id,type){
  if(!container||container.querySelector('#'+id))return;
  const label=document.createElement('label');label.textContent='Exercise type';
@@ -122,8 +126,12 @@ const oldStart=window.startSession;
 if(typeof oldStart==='function')window.startSession=function(){
  const result=oldStart.apply(this,arguments);
  if(sessionDraft?.sets){
-  let changed=false;
-  for(const set of sessionDraft.sets){if(isCardio(set.exercise,set.activityType)&&set.activityType!=='cardio'){set.activityType='cardio';changed=true}}
+  const routine=(db.routines||[]).find(r=>r.id===sessionDraft.routineId);let changed=false;
+  for(const set of sessionDraft.sets){
+   const saved=meta()[norm(set.exercise)]?.type,routineType=routine?.exercises?.find(x=>norm(x.name)===norm(set.exercise))?.activityType;
+   const type=saved||routineType||(cardioWords.test(set.exercise)?'cardio':'strength');
+   if(set.activityType!==type){set.activityType=type;changed=true}
+  }
   if(changed){persistDraft();if(typeof window.editSession==='function')window.editSession()}
  }
  return result;
@@ -203,3 +211,4 @@ if(typeof oldViewSession==='function')window.viewSession=function(id){
  modal(`<h2>${safe(session.name)}</h2><p>${safe(session.date)}${session.durationMinutes?' · '+safe(session.durationMinutes)+' min':''}</p>${rows.join('')||'<p class="empty">No logged movements.</p>'}<div class="actions"><button class="button secondary" onclick="deleteSession('${safe(id)}')">Delete workout</button></div>`);
 };
 })();
+

@@ -18,10 +18,11 @@ function exerciseGroups(){
   g.sets.push(s);
  }
  const routine=db.routines.find(r=>r.id===sessionDraft.routineId);
- groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=pairOf(g.name)?'superset':'straight';g.superset=pairOf(g.name)||null;g.reps=e?.reps||10;});
+ groups.forEach(g=>{const e=routine?.exercises?.find(e=>e.name===g.name);g.style=pairOf(g.name)?'superset':'straight';g.superset=pairOf(g.name)||null;g.reps=e?.reps||10;g.notes=e?.notes||sessionDraft.exerciseNotes?.[g.name]||'';});
  return groups;
 }
 function indexFor(s){return sessionDraft.sets.indexOf(s)}
+function exerciseNote(g){return `<label class="tiny muted" style="display:block;margin:8px 0">Note for next time<textarea rows="2" maxlength="300" data-form-exercise-note="${safeText(g.name)}" placeholder="e.g. use bands" style="margin-top:5px">${safeText(g.notes||'')}</textarea></label>`}
 function lastSet(name,n){
  const sessions=[...db.sessions].sort((a,b)=>b.date.localeCompare(a.date));
  for(const sess of sessions){const found=sess.sets.find(x=>x.exercise===name&&x.set===n);if(found)return `${found.weight}kg × ${found.reps}`}
@@ -124,11 +125,11 @@ function renderWorkout(){
  ${blocks.map((block,bi)=>{
   if(block.members.length===1){
    const g=block.members[0],i=g.index;
-   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">STRAIGHT SETS</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>${exerciseActions(g,i,groups)}${openCards.has(bi)?setHeader()+g.sets.map(s=>setRow(s,g.name)).join('')+'<p class="tiny muted">Rest as needed between sets.</p>':''}</section>`;
+   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">STRAIGHT SETS</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>${exerciseActions(g,i,groups)}${openCards.has(bi)?exerciseNote(g)+setHeader()+g.sets.map(s=>setRow(s,g.name)).join('')+'<p class="tiny muted">Rest as needed between sets.</p>':''}</section>`;
   }
   const rounds=Math.max(...block.members.map(g=>g.sets.length));
   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">SUPERSET ${safeText(block.label)}</span><strong>${block.members.map(g=>safeText(g.name)).join(' + ')}</strong><span class="tiny muted">${rounds} alternating rounds · ${block.members.length} exercises</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>
-  ${openCards.has(bi)?Array.from({length:rounds},(_,ri)=>{
+  ${openCards.has(bi)?block.members.map(exerciseNote).join('')+Array.from({length:rounds},(_,ri)=>{
    const present=block.members.filter(g=>g.sets[ri]);
    const finished=present.every(g=>done[indexFor(g.sets[ri])]);
    return `<div class="form-round"><div class="row" style="margin:10px 0"><b style="color:#a8e6bc">Round ${ri+1}</b><span class="tiny muted">${finished?'Complete':'Alternate exercises in order'}</span></div>${present.map((g,gi)=>`<div class="form-round-exercise"><div class="row"><strong>${safeText(block.label)}${gi+1} · ${safeText(g.name)}</strong><span class="tiny muted">Set ${g.sets[ri].set}</span></div>${setHeader()}${setRow(g.sets[ri],g.name)}</div>`).join('')}<p class="tiny muted">${ri<rounds-1?'Rest after this round, then repeat.':'Superset finished after this round.'}</p></div>`;
@@ -142,15 +143,50 @@ function renderWorkout(){
 window.formToggleCard=function(i){if(openCards.has(i))openCards.delete(i);else openCards.add(i);renderWorkout()};
 window.formDraftValue=function(i,k,v){if(!sessionDraft?.sets[i])return;sessionDraft.sets[i][k]=Math.max(0,Number(v)||0);persist()};
 window.formDraftDone=function(i,v){done[i]=!!v;persist();const label=$('modalContent').querySelector('p.muted');if(label)label.textContent=`${done.filter(Boolean).length} / ${sessionDraft.sets.length} sets completed · Changes saved on this device as you type.`};
+document.addEventListener('input',function(event){const field=event.target?.closest?.('[data-form-exercise-note]');if(!field||!sessionDraft)return;const name=field.dataset.formExerciseNote,value=field.value.slice(0,300),routine=db.routines.find(r=>r.id===sessionDraft.routineId),entry=routine?.exercises?.find(x=>x.name===name);if(entry){entry.notes=value;save()}else{sessionDraft.exerciseNotes=sessionDraft.exerciseNotes||{};sessionDraft.exerciseNotes[name]=value;persist()}});
 window.formKeepDraft=function(){persist();close();render()};
 window.formDiscardDraft=function(){if(confirm('Discard the unsaved workout draft? Completed workout history is not affected.')){clearDraft();close();render()}};
+window.formUpdateAddedExerciseFields=function(inferType){
+ const name=$('newWorkoutExercise')?.value.trim()||'',typeSelect=$('newWorkoutType'),mode=$('newWorkoutSaveMode')?.value||'session';
+ if(inferType!==false&&typeSelect){
+  let saved='';
+  try{saved=JSON.parse(localStorage.getItem('form-v21-exercise-meta')||'{}')[name.toLowerCase()]?.type||''}catch{}
+  typeSelect.value=saved||(/\b(cardio|aerobic|run|running|jog|jogging|sprint|cycle|cycling|bike|biking|row|rowing|swim|swimming|walk|walking|hike|treadmill|elliptical|cross trainer|stair|skipping|jump rope|ski erg|assault bike|spin|zumba|endurance)\b/i.test(name)?'cardio':'strength');
+ }
+ const cardio=typeSelect?.value==='cardio',setLabel=$('newWorkoutSetLabel'),repsLabel=$('newWorkoutRepsLabel'),libraryFields=$('newWorkoutLibraryFields');
+ if(setLabel)setLabel.firstChild.textContent=cardio?'Intervals':'Sets';
+ if(repsLabel)repsLabel.hidden=cardio;
+ if(libraryFields)libraryFields.hidden=!['library','both'].includes(mode);
+ if(cardio&&$('newWorkoutGroup')&&inferType!==false)$('newWorkoutGroup').value='Cardio';
+};
 window.formAddDuringWorkout=function(){
  const names=(typeof formCombinedExercises==='function'?formCombinedExercises():typeof FORM_EXERCISES!=='undefined'?FORM_EXERCISES:[]);
  const opts=Array.isArray(names)?names.map(x=>Array.isArray(x)?x[0]:x.name).filter(Boolean):[];
- const list=[...new Set(opts)].sort();
- $('modalContent').innerHTML=`<h2>Add exercise to workout</h2><label>Choose from your library or type a custom exercise</label><input id="newWorkoutExercise" list="workoutExerciseOptions" placeholder="Exercise name"><datalist id="workoutExerciseOptions">${list.map(n=>`<option value="${safeText(n)}"></option>`).join('')}</datalist><label>Sets</label><input type="number" id="newWorkoutSets" min="1" max="12" value="3"><label>Target reps</label><input type="number" id="newWorkoutReps" min="1" max="100" value="10"><div class="actions"><button class="button" onclick="formConfirmAddedExercise()">Add to session</button><button class="button secondary" onclick="editSession()">Back to workout</button></div>`;
+ const list=[...new Set(opts)].sort(),routineAvailable=(db.routines||[]).some(r=>r.id===sessionDraft?.routineId);
+ $('modalContent').innerHTML=`<h2>Add exercise to workout</h2><label>Choose from your library or type a custom exercise</label><input id="newWorkoutExercise" list="workoutExerciseOptions" placeholder="Exercise name" onchange="formUpdateAddedExerciseFields(true)"><datalist id="workoutExerciseOptions">${list.map(n=>`<option value="${safeText(n)}"></option>`).join('')}</datalist><label>Exercise type<select id="newWorkoutType" onchange="formUpdateAddedExerciseFields(false)"><option value="strength">Strength</option><option value="cardio">Cardio</option></select></label><label>Save exercise as<select id="newWorkoutSaveMode" onchange="formUpdateAddedExerciseFields(false)"><option value="session">This workout only</option>${routineAvailable?'<option value="routine">Add to this routine</option>':''}<option value="library">Add to exercise library</option>${routineAvailable?'<option value="both">Add to routine and library</option>':''}</select></label><div id="newWorkoutLibraryFields" hidden><label>Category<select id="newWorkoutGroup"><option>Other</option><option>Cardio</option><option>Chest</option><option>Shoulders</option><option>Back</option><option>Arms</option><option>Glutes</option><option>Legs</option><option>Core</option></select></label><label>Equipment<input id="newWorkoutEquipment" value="Other" maxlength="60"></label></div><label id="newWorkoutSetLabel">Sets<input type="number" id="newWorkoutSets" min="1" max="12" value="3"></label><label id="newWorkoutRepsLabel">Target reps<input type="number" id="newWorkoutReps" min="1" max="100" value="10"></label><div class="actions"><button class="button" onclick="formConfirmAddedExercise()">Add to session</button><button class="button secondary" onclick="editSession()">Back to workout</button></div>`;
+ formUpdateAddedExerciseFields(true);
 };
-window.formConfirmAddedExercise=function(){const name=$('newWorkoutExercise').value.trim(),sets=Math.max(1,Math.min(12,Number($('newWorkoutSets').value)||3)),reps=Math.max(1,Math.min(100,Number($('newWorkoutReps').value)||10));if(!name)return alert('Enter an exercise name.');if(sessionDraft.sets.some(x=>x.exercise.toLowerCase()===name.toLowerCase()))return alert('That exercise is already in this workout.');for(let i=1;i<=sets;i++){sessionDraft.sets.push({exercise:name,set:i,reps,weight:0});done.push(false)}openCards.add(exerciseGroups().length-1);persist();renderWorkout()};
+window.formConfirmAddedExercise=function(){
+ const name=$('newWorkoutExercise').value.trim(),type=$('newWorkoutType')?.value==='cardio'?'cardio':'strength',mode=$('newWorkoutSaveMode')?.value||'session',sets=Math.max(1,Math.min(12,Number($('newWorkoutSets').value)||3)),reps=type==='cardio'?0:Math.max(1,Math.min(100,Number($('newWorkoutReps').value)||10));
+ if(!name)return alert('Enter an exercise name.');
+ if(sessionDraft.sets.some(x=>x.exercise.toLowerCase()===name.toLowerCase()))return alert('That exercise is already in this workout.');
+ const routine=(db.routines||[]).find(r=>r.id===sessionDraft.routineId),saveRoutine=['routine','both'].includes(mode),saveLibrary=['library','both'].includes(mode);
+ if(saveRoutine&&!routine)return alert('This workout is not linked to a saved routine. Choose workout only or exercise library.');
+ for(let i=1;i<=sets;i++){sessionDraft.sets.push({exercise:name,set:i,reps,weight:0,activityType:type,durationMinutes:null,distanceKm:null,effortRating:null});done.push(false)}
+ if(saveRoutine){
+  const entry=(routine.exercises||[]).find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(entry){entry.activityType=type;entry.sets=Math.max(Number(entry.sets)||sets,sets);if(type==='strength')entry.reps=reps}
+  else{routine.exercises=routine.exercises||[];routine.exercises.push({name,activityType:type,sets,reps,rir:2,style:'straight',supersetGroup:null,tempo:'',notes:''})}
+ }
+ if(saveLibrary){
+  db.exerciseLibrary=Array.isArray(db.exerciseLibrary)?db.exerciseLibrary:[];
+  const exists=[...(typeof FORM_EXERCISES!=='undefined'?FORM_EXERCISES:[]),...(typeof FORM_PERSONAL_EXERCISES!=='undefined'?FORM_PERSONAL_EXERCISES:[]),...db.exerciseLibrary].some(x=>String(Array.isArray(x)?x[0]:x?.name||x).toLowerCase()===name.toLowerCase());
+  if(!exists)db.exerciseLibrary.push([name,$('newWorkoutGroup')?.value|| (type==='cardio'?'Cardio':'Other'),$('newWorkoutEquipment')?.value.trim()||'Other']);
+  if(typeof formV391SaveExerciseType==='function')formV391SaveExerciseType(name,type);
+ }
+ if(saveRoutine||saveLibrary)save();
+ openCards.add(exerciseGroups().length-1);persist();renderWorkout();
+};
 // All editing is performed on the local draft, never on completed history.
 function replaceDraft(entries){
  sessionDraft.sets=entries.map(e=>e.set);
@@ -253,3 +289,4 @@ workoutDialog.addEventListener('close',function(){
  },0);
 });
 })();
+
