@@ -114,6 +114,19 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   if(path.startsWith('/api/'))return json({error:'Sign in to FORM'},401);
   return new Response(null,{status:303,headers:{Location:'/form-login','Cache-Control':'no-store'}});
  }
+ if(path==='/api/food/barcode'){
+  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+  const code=url.searchParams.get('code')||'';
+  if(!/^\d{8,14}$/.test(code))return json({error:'Enter a valid food barcode'},400);
+  const target='https://world.openfoodfacts.org/api/v3/product/'+code+'.json?fields=code%2Cproduct_name%2Cbrands%2Cquantity%2Cserving_size%2Cserving_quantity%2Cnutriments';
+  let upstream;
+  try{upstream=await fetch(target,{headers:{'Accept':'application/json','User-Agent':'FORM-Fitness/0.4'}})}catch(_){return json({error:'Product database is unavailable'},502)}
+  let result;
+  try{result=await upstream.json()}catch(_){return json({error:'Product database returned an unreadable response'},502)}
+  if(upstream.status===404||result.result?.id==='product_not_found'||!result.product)return json({error:'Product not found'},404);
+  if(!upstream.ok)return json({error:'Product database is unavailable'},502);
+  return json({product:result.product});
+ }
  if(path.startsWith('/api/ai/')){
   // Reuse the existing signed AI session verifier without exposing the Worker.
   const p=b64(JSON.stringify({v:1,exp:Date.now()+10*60*1000}));
