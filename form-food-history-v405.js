@@ -25,6 +25,18 @@ function dateField(id,label='Diary date',value=diaryDate,change='formFoodHistory
 
 // Let the existing Nutrition view and its daily totals render for the chosen day.
 const oldNutrition=window.nutrition,oldCurrentFood=window.currentFood,oldTotals=window.totals;
+function foodCardWithScroll(html,selected){
+ const heading=selected===today()?"Today's food":`Food on ${prettyDate(selected)}`;
+ const headingAt=html.indexOf(`<h2>${heading}</h2>`);
+ if(headingAt<0)return html;
+ const cardStart=html.lastIndexOf('<div class="card"',headingAt);
+ const rowEnd=html.indexOf('</div>',headingAt)+6;
+ if(cardStart<0||rowEnd<6)return html;
+ const tags=/<div\b[^>]*>|<\/div>/gi;tags.lastIndex=cardStart;let depth=0,cardEnd=-1,match;
+ while((match=tags.exec(html))){if(match[0].startsWith('</'))depth--;else depth++;if(depth===0){cardEnd=tags.lastIndex;break}}
+ if(cardEnd<0||rowEnd>=cardEnd)return html;
+ return html.slice(0,rowEnd)+'<div class="form-food-history-list">'+html.slice(rowEnd,cardEnd-6)+'</div></div>'+html.slice(cardEnd);
+}
 if(typeof oldNutrition==='function')window.nutrition=function(){
  const selected=diaryDate;
  window.currentFood=()=> (db.foods||[]).filter(food=>food.date===selected);
@@ -32,7 +44,12 @@ if(typeof oldNutrition==='function')window.nutrition=function(){
  try{
   let html=oldNutrition.apply(this,arguments);
   html=html.replace(/Today's food/g,selected===today()?"Today's food":`Food on ${prettyDate(selected)}`);
-  return `<div class="card" style="padding:12px 15px"><label for="formFoodDiaryDate" style="margin:0 0 5px">View food diary date</label><input id="formFoodDiaryDate" type="date" value="${selected}" max="${today()}" onchange="formFoodHistoryChooseDiaryDate(this.value)"><p class="tiny muted" style="margin:6px 0 0">Choose a past date to review or add missed food entries.</p></div>`+html;
+  html=foodCardWithScroll(html,selected);
+  const dateControl=`<div class="form-food-date-control" style="display:flex;align-items:center;gap:10px;margin:0 0 14px;min-width:0"><label for="formFoodDiaryDate" style="margin:0;white-space:nowrap">Diary date</label><input id="formFoodDiaryDate" type="date" value="${selected}" max="${today()}" onchange="formFoodHistoryChooseDiaryDate(this.value)" style="width:auto;max-width:190px;min-width:0;min-height:40px;padding:7px 9px"></div>`;
+  const style='<style>.form-food-history-list{max-height:230px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-right:4px}@media(min-width:700px){.form-food-history-list{max-height:320px}}</style>';
+  const titleEnd=html.indexOf('</p>',html.indexOf('<h1>Nutrition</h1>'));
+  if(titleEnd>=0)return html.slice(0,titleEnd+4)+dateControl+style+html.slice(titleEnd+4);
+  return dateControl+style+html;
  }finally{window.currentFood=oldCurrentFood;window.totals=oldTotals}
 };
 
