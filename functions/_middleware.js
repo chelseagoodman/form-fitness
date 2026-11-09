@@ -8,7 +8,7 @@ const json=(body,status=200,headers={})=>new Response(JSON.stringify(body),{stat
 const random=()=>{const b=crypto.getRandomValues(new Uint8Array(32));return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('')};
 const sha=async x=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode(x))),b=>b.toString(16).padStart(2,'0')).join('');
 const cookie=(req,name)=>((req.headers.get('Cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='))||'').slice(name.length+1);
-const expiry=30*24*3600;
+const expiry=7*24*3600;
 const cookieAttrs='; Secure; HttpOnly; SameSite=Strict; Path=/';
 const sign=async(secret,value)=>{const key=await crypto.subtle.importKey('raw',enc.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,enc.encode('FORM-PAGES-SESSION-v1:'+value)));return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
 const b64=x=>btoa(String.fromCharCode(...enc.encode(x))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
