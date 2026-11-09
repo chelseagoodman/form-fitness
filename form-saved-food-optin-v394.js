@@ -27,7 +27,7 @@
     const name = String(food?.name || '').trim();
     const k = key(name);
     if (!k || savedFoods().some(item => key(item.name) === k)) return true;
-    if (askFirst && !confirm('Also add “' + name + '” to Saved Foods / Quick Add? It will stay in today’s diary either way.')) return false;
+    if (askFirst && !confirm('Also add “' + name + '” to Saved Foods / Quick Add? It will stay in your diary either way.')) return false;
 
     const previous = db[SAVED].slice();
     const oldHidden = Array.isArray(db[HIDDEN]) ? db[HIDDEN].slice() : [];

@@ -46,10 +46,29 @@ function saveDraft(){
  try{const stored=JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}');stored.draft=sessionDraft;localStorage.setItem(DRAFT_KEY,JSON.stringify(stored));}catch(e){console.warn('Could not save progression choices',e)}
 }
 function reviewHtml(items){
- return `<h2>Progression suggestions</h2><p class="muted">Based on your latest saved strength workout. These are optional starting points, not automatic changes. You can edit every set in the workout.</p>${items.map((x,i)=>{
+ return `<style>
+ .form-v402-review{min-width:0;overflow-wrap:anywhere}
+ .form-v402-review h2{margin:0 0 6px}
+ .form-v402-review-intro,.form-v402-review-note{font-size:12px;line-height:1.4;margin:0 0 9px}
+ .form-v402-exercise{border:1px solid #405349;border-radius:12px;padding:9px 10px;margin:7px 0;background:#17221d;min-width:0}
+ .form-v402-exercise summary{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;cursor:pointer;list-style:none;min-width:0}
+ .form-v402-exercise summary::-webkit-details-marker{display:none}
+ .form-v402-exercise summary input{width:18px;height:18px;min-height:18px;margin:0;padding:0}
+ .form-v402-title{font-size:14px;font-weight:700;min-width:0;overflow-wrap:anywhere}
+ .form-v402-toggle{font-size:11px;color:#a8e6bc;white-space:nowrap}
+ .form-v402-meta{font-size:11px;color:#9aada4;margin:3px 0 0}
+ .form-v402-details{border-top:1px solid #34443b;margin-top:8px;padding-top:7px}
+ .form-v402-reason{font-size:12px;line-height:1.4;margin:0 0 8px;color:#c5d4cc}
+ .form-v402-table{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,1fr);gap:5px 7px;align-items:center}
+ .form-v402-table input{box-sizing:border-box;width:100%;min-width:0;min-height:39px;padding:7px;font-size:16px}
+ .form-v402-table strong{font-size:11px;color:#9aada4}
+ .form-v402-actions{margin-top:10px}
+ .form-v402-actions button{flex:1 1 135px;min-width:0}
+ @media(max-width:380px){.form-v402-review h2{font-size:18px}.form-v402-exercise{padding:8px}.form-v402-table{grid-template-columns:22px minmax(0,1fr) minmax(0,1fr);gap:5px}.form-v402-table input{padding:6px 5px}}
+ </style><div class="form-v402-review"><h2>Progression suggestions</h2><p class="muted form-v402-review-intro">Optional targets from your last strength workout. Edit any set or skip the suggestions.</p>${items.map((x,i)=>{
   const last=x.previous.map(s=>`${Number(s.weight)||0} kg × ${Number(s.reps)||0}`).join(' · ');
-  return `<section class="card" style="margin:12px 0"><h3>${esc(x.name)}</h3><p class="tiny muted">Last session: ${esc(last||'No set details')}<br>${esc(x.reason)}</p><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="formV402Use${i}" checked> Use suggestion for this exercise</label><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px"><strong class="tiny">Set</strong><strong class="tiny">Weight (kg)</strong><strong class="tiny">Reps</strong>${x.sets.map((s,j)=>`<span>${j+1}</span><input id="formV402W${i}_${j}" type="number" min="0" step="0.5" value="${x.nextWeights[j]}"><input id="formV402R${i}_${j}" type="number" min="0" step="1" value="${x.nextReps[j]}">`).join('')}</div></section>`;
- }).join('')}<p class="tiny muted">Your routine stays unchanged. This choice applies to this workout only.</p><div class="actions"><button class="button" onclick="formV402StartWorkout(false)">Start workout</button><button class="button secondary" onclick="formV402StartWorkout(true)">Skip all suggestions</button></div>`;
+  return `<details class="form-v402-exercise"><summary><input type="checkbox" id="formV402Use${i}" checked aria-label="Use suggestion for ${esc(x.name)}"><span><span class="form-v402-title">${esc(x.name)}</span><span class="form-v402-meta">${x.sets.length} sets · Suggested targets — tap to review</span></span><span class="form-v402-toggle">Review ▾</span></summary><div class="form-v402-details"><p class="form-v402-meta">Last: ${esc(last||'No set details')}</p><p class="form-v402-reason">${esc(x.reason)}</p><div class="form-v402-table"><strong>Set</strong><strong>Weight (kg)</strong><strong>Reps</strong>${x.sets.map((s,j)=>`<span class="tiny">${j+1}</span><input id="formV402W${i}_${j}" type="number" min="0" step="0.5" value="${x.nextWeights[j]}" aria-label="${esc(x.name)} set ${j+1} weight in kilograms"><input id="formV402R${i}_${j}" type="number" min="0" step="1" value="${x.nextReps[j]}" aria-label="${esc(x.name)} set ${j+1} reps">`).join('')}</div></div></details>`;
+ }).join('')}<p class="muted form-v402-review-note">Your routine stays unchanged. These choices apply to this workout only.</p><div class="actions form-v402-actions"><button class="button" onclick="formV402StartWorkout(false)">Start workout</button><button class="button secondary" onclick="formV402StartWorkout(true)">Skip suggestions</button></div></div>`;
 }
 function restoreBaseline(items){
  for(const item of items)for(let j=0;j<item.sets.length;j++){
