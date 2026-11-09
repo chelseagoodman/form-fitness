@@ -68,38 +68,51 @@ function showProduct(product,code){
  const serving=servingFromText||number(product.serving_quantity)||100;
  barcodePer100=[calories,protein,carbs,fat];barcodeUnit=basis;
  const missing=barcodePer100.some(value=>value===null);
- root.innerHTML=`<h2>Review product</h2><p class="tiny muted">Barcode ${safe(code)} · Product data from Open Food Facts. Check it against the package label.</p><p class="tiny muted">${safe(product.quantity||'')}${product.serving_size?' · Serving listed in product data (check package): '+safe(product.serving_size):''}</p><label for="formBarcodeName">Food name</label><input id="formBarcodeName" value="${safe(title)}"><label for="formBarcodeGrams">Amount eaten (${basis})</label><input id="formBarcodeGrams" data-unit="${basis}" type="number" min="0.1" step="0.1" value="${serving||100}" oninput="formBarcodeUpdateTotals()"><div class="card" id="formBarcodeTotal" style="margin:12px 0;padding:12px"><h3 style="margin:0 0 8px">Macros for amount eaten</h3><div class="grid"><div><div class="label">Calories</div><b id="formBarcodeTotalKcal">—</b></div><div><div class="label">Protein</div><b id="formBarcodeTotalProtein">—</b></div><div><div class="label">Carbs</div><b id="formBarcodeTotalCarbs">—</b></div><div><div class="label">Fat</div><b id="formBarcodeTotalFat">—</b></div></div><p class="tiny muted" id="formBarcodeTotalAmount" style="margin:8px 0 0"></p><p class="tiny muted" id="formBarcodeTotalMessage" style="margin:6px 0 0"></p></div>${missing?'<p class="tiny muted">The product record is missing one or more nutrition values, so it cannot be logged accurately. Use “Add manually instead” to enter the package values.</p>':''}<label style="display:flex;align-items:center;gap:8px"><input id="formBarcodeQuick" type="checkbox" style="width:18px;min-height:18px;margin:0;padding:0">Also save to Quick Add</label><div class="actions"><button class="button" onclick="formBarcodeSave()">Log food</button><button class="button secondary" onclick="formBarcodeManual()">Add manually instead</button></div>`;
+ root.innerHTML=`<h2>Review product</h2><p class="tiny muted">Barcode ${safe(code)} · Product data from Open Food Facts. Check it against the package label.</p><p class="tiny muted">${safe(product.quantity||'')}${product.serving_size?' · Serving listed in product data (check package): '+safe(product.serving_size):''}</p><label for="formBarcodeName">Food name</label><input id="formBarcodeName" value="${safe(title)}"><label for="formBarcodeGrams">Amount eaten (${basis})</label><input id="formBarcodeGrams" data-unit="${basis}" type="number" min="0.1" step="0.1" value="${serving||100}" oninput="formBarcodeUpdateTotals()"><div class="card" id="formBarcodeTotal" style="margin:12px 0;padding:12px"><h3 style="margin:0 0 8px">Macros for amount eaten</h3><div class="grid"><div><label class="label" for="formBarcodeTotalKcal">Calories (kcal)</label><input id="formBarcodeTotalKcal" type="number" min="0" step="0.1" inputmode="decimal" aria-label="Calories for amount eaten" oninput="formBarcodeEditTotal(0)" style="padding:6px;min-height:36px"></div><div><label class="label" for="formBarcodeTotalProtein">Protein (g)</label><input id="formBarcodeTotalProtein" type="number" min="0" step="0.1" inputmode="decimal" aria-label="Protein for amount eaten" oninput="formBarcodeEditTotal(1)" style="padding:6px;min-height:36px"></div><div><label class="label" for="formBarcodeTotalCarbs">Carbs (g)</label><input id="formBarcodeTotalCarbs" type="number" min="0" step="0.1" inputmode="decimal" aria-label="Carbohydrates for amount eaten" oninput="formBarcodeEditTotal(2)" style="padding:6px;min-height:36px"></div><div><label class="label" for="formBarcodeTotalFat">Fat (g)</label><input id="formBarcodeTotalFat" type="number" min="0" step="0.1" inputmode="decimal" aria-label="Fat for amount eaten" oninput="formBarcodeEditTotal(3)" style="padding:6px;min-height:36px"></div></div><p class="tiny muted" id="formBarcodeTotalAmount" style="margin:8px 0 0"></p><p class="tiny muted" id="formBarcodeTotalMessage" style="margin:6px 0 0"></p></div>${missing?'<p class="tiny muted">The product record is missing one or more nutrition values, so it cannot be logged accurately. Use “Add manually instead” to enter the package values.</p>':''}<label style="display:flex;align-items:center;gap:8px"><input id="formBarcodeQuick" type="checkbox" style="width:18px;min-height:18px;margin:0;padding:0">Also save to Quick Add</label><div class="actions"><button class="button" onclick="formBarcodeSave()">Log food</button><button class="button secondary" onclick="formBarcodeManual()">Add manually instead</button></div>`;
  const logButton=root.querySelector('button[onclick="formBarcodeSave()"]');if(logButton&&missing)logButton.disabled=true;
  window.formBarcodeUpdateTotals();
 }
 
+const barcodeMacroIds=['formBarcodeTotalKcal','formBarcodeTotalProtein','formBarcodeTotalCarbs','formBarcodeTotalFat'];
+window.formBarcodeEditTotal=function(index){
+ const grams=number(byId('formBarcodeGrams')?.value),value=number(byId(barcodeMacroIds[index])?.value);
+ if(grams===null||value===null||!barcodePer100||!Number.isInteger(index)||index<0||index>3)return;
+ barcodePer100[index]=value*100/grams;
+ const amount=byId('formBarcodeTotalAmount'),message=byId('formBarcodeTotalMessage');
+ if(amount)amount.textContent=`Edited values for ${grams} ${barcodeUnit} eaten · these are the values that will be logged`;
+ if(message)message.textContent='Change the amount eaten above to recalculate from your edited values.';
+};
+
 window.formBarcodeUpdateTotals=function(){
  const grams=number(byId('formBarcodeGrams')?.value);
- const ids=['formBarcodeTotalKcal','formBarcodeTotalProtein','formBarcodeTotalCarbs','formBarcodeTotalFat'];
  const amount=byId('formBarcodeTotalAmount'),message=byId('formBarcodeTotalMessage');
  if(!amount||!message)return;
  if(grams===null||!barcodePer100||barcodePer100.some(value=>value===null)){
-  ids.forEach(id=>{const el=byId(id);if(el)el.textContent='—'});
+  barcodeMacroIds.forEach(id=>{const el=byId(id);if(el)el.value=''});
   amount.textContent=grams===null?'Enter the amount eaten to calculate macros.':'';
   if(barcodePer100?.some(value=>value===null))message.textContent='Nutrition data is incomplete. Use “Add manually instead” to enter the package values.';
   else message.textContent='';
   return;
  }
  const totals=barcodePer100.map(value=>Math.round(value*grams/100*10)/10);
- ids.forEach((id,index)=>{const el=byId(id);if(el)el.textContent=totals[index]+(index===0?' kcal':' g')});
+ barcodeMacroIds.forEach((id,index)=>{const el=byId(id);if(el)el.value=totals[index]});
  amount.textContent=`Calculated for ${grams} ${barcodeUnit} eaten · these are the values that will be logged`;
- message.textContent='Change the amount eaten above to recalculate.';
+ message.textContent='Edit any value if needed; changing the amount eaten will scale your edited values.';
 };
 
 window.formBarcodeSave=function(){
  const name=byId('formBarcodeName')?.value.trim(),grams=number(byId('formBarcodeGrams')?.value);
+ const totals=barcodeMacroIds.map(id=>number(byId(id)?.value));
  if(!name)return alert('Enter a food name.');
- if(grams===null||!barcodePer100||barcodePer100.some(value=>value===null))return alert('This product is missing nutrition details. Add the food manually using the package values.');
- const totals=barcodePer100.map(value=>Math.round(value*grams/100*10)/10),record={id:uid(),date:window.formFoodDiaryDate||TODAY(),name,calories:totals[0],protein:totals[1],carbs:totals[2],fat:totals[3]};
+ if(grams===null||totals.some(value=>value===null))return alert('Enter the amount eaten and all four macro values.');
+ if(!barcodePer100||barcodePer100.some(value=>value===null))return alert('This product is missing nutrition details. Add the food manually using the package values.');
+ barcodePer100=totals.map(value=>value*100/grams);
+ const record={id:uid(),date:window.formFoodDiaryDate||TODAY(),name,calories:totals[0],protein:totals[1],carbs:totals[2],fat:totals[3]};
  db.foods.push(record);if(!save()){db.foods.pop();alert('Unable to save; device storage may be full.');return}
  if(byId('formBarcodeQuick')?.checked)window.formSavedFoodAdd?.(record);
  stopCamera();close();render();
 };
 window.formBarcodeManual=function(){stopCamera();close();foodForm()};
 })();
+
 
