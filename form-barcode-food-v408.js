@@ -101,6 +101,7 @@ window.formBarcodeUpdateTotals=function(){
 };
 
 window.formBarcodeSave=function(){
+ window.formFoodHistorySyncToday?.();
  const name=byId('formBarcodeName')?.value.trim(),grams=number(byId('formBarcodeGrams')?.value);
  const totals=barcodeMacroIds.map(id=>number(byId(id)?.value));
  if(!name)return alert('Enter a food name.');
@@ -114,5 +115,6 @@ window.formBarcodeSave=function(){
 };
 window.formBarcodeManual=function(){stopCamera();close();foodForm()};
 })();
+
 
 

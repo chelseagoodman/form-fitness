@@ -2,12 +2,28 @@
 (function(){
 'use strict';
 const todayFn=window.TODAY;
-const today=()=>typeof todayFn==='function'?todayFn():new Date().toISOString().slice(0,10);
+const localToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+const today=()=>typeof todayFn==='function'?todayFn():localToday();
 const cleanDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))&&value<=today()?String(value):today();
-let diaryDate=cleanDate(window.formFoodDiaryDate||today());
+let diaryDate=today(),lastSeenToday=diaryDate,explicitlySelectedDate=false;
 window.formFoodDiaryDate=diaryDate;
+function syncToday(){
+ const current=today();if(current===lastSeenToday)return;
+ const previous=lastSeenToday,shouldAdvance=!explicitlySelectedDate&&diaryDate===previous;
+ lastSeenToday=current;
+ if(!shouldAdvance)return;
+ diaryDate=current;window.formFoodDiaryDate=current;
+ ['formFoodDiaryDate','formFoodEntryDate','formAiLogDate','formV404LogDate'].forEach(id=>{const field=document.getElementById(id);if(field&&field.value===previous)field.value=current});
+ window.formFoodHistoryUpdateLogLabels?.(current);
+ if(document.getElementById('formFoodDiaryDate')&&!document.getElementById('modal')?.open&&typeof window.render==='function')window.render();
+}
+window.formFoodHistorySyncToday=syncToday;
+setInterval(syncToday,30000);
+window.addEventListener('focus',syncToday);
+window.addEventListener('pageshow',syncToday);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncToday()});
 const prettyDate=value=>value===today()?'today':new Date(value+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
-window.formFoodHistorySetDate=function(value){diaryDate=cleanDate(value);window.formFoodDiaryDate=diaryDate;window.formFoodHistoryUpdateLogLabels(diaryDate)};
+window.formFoodHistorySetDate=function(value){syncToday();diaryDate=cleanDate(value);explicitlySelectedDate=diaryDate!==today();window.formFoodDiaryDate=diaryDate;window.formFoodHistoryUpdateLogLabels(diaryDate)};
 window.formFoodHistoryChooseDiaryDate=function(value){window.formFoodHistorySetDate(value);if(typeof window.render==='function')window.render()};
 window.formFoodHistoryUpdateLogLabels=function(value){
  const d=cleanDate(value||diaryDate),when=d===today()?'today':prettyDate(d);
@@ -38,7 +54,7 @@ function foodCardWithScroll(html,selected){
  return html.slice(0,rowEnd)+'<div class="form-food-history-list">'+html.slice(rowEnd,cardEnd-6)+'</div></div>'+html.slice(cardEnd);
 }
 if(typeof oldNutrition==='function')window.nutrition=function(){
- const selected=diaryDate;
+ syncToday();const selected=diaryDate;
  window.currentFood=()=> (db.foods||[]).filter(food=>food.date===selected);
  window.totals=()=>window.currentFood().reduce((a,f)=>({calories:a.calories+(Number(f.calories)||0),protein:a.protein+(Number(f.protein)||0),carbs:a.carbs+(Number(f.carbs)||0),fat:a.fat+(Number(f.fat)||0)}),{calories:0,protein:0,carbs:0,fat:0});
  try{
@@ -56,9 +72,9 @@ if(typeof oldNutrition==='function')window.nutrition=function(){
 // Add a date to manual entries; retain the existing save path and Quick Add opt-in.
 const oldFoodForm=window.foodForm,oldSaveFood=window.saveFood;
 if(typeof oldFoodForm==='function'&&typeof oldSaveFood==='function'){
- window.foodForm=function(){modal(`<h2>Add food</h2>${dateField('formFoodEntryDate','Date eaten',diaryDate)}${field('Food / meal name','fn')}${field('Calories (kcal)','fc','number',0,'min="0"')}${field('Protein (g)','fp','number',0,'min="0"')}${field('Carbohydrates (g)','fcar','number',0,'min="0"')}${field('Fat (g)','ff','number',0,'min="0"')}<div class="actions">${btn('Save food','saveFood()')}</div>`)};
+ window.foodForm=function(){syncToday();modal(`<h2>Add food</h2>${dateField('formFoodEntryDate','Date eaten',diaryDate)}${field('Food / meal name','fn')}${field('Calories (kcal)','fc','number',0,'min="0"')}${field('Protein (g)','fp','number',0,'min="0"')}${field('Carbohydrates (g)','fcar','number',0,'min="0"')}${field('Fat (g)','ff','number',0,'min="0"')}<div class="actions">${btn('Save food','saveFood()')}</div>`)};
  window.saveFood=function(){
-  const selected=cleanDate(document.getElementById('formFoodEntryDate')?.value||diaryDate),before=(db.foods||[]).length;
+  syncToday();const selected=cleanDate(document.getElementById('formFoodEntryDate')?.value||diaryDate),before=(db.foods||[]).length;
   const result=oldSaveFood.apply(this,arguments),added=(db.foods||[]).slice(before);
   if(added.length){for(const food of added)food.date=selected;save();if(typeof window.render==='function')window.render()}
   return result;
@@ -68,7 +84,7 @@ if(typeof oldFoodForm==='function'&&typeof oldSaveFood==='function'){
 // Keep the date visible at the final decision point for AI analysis and Coach meals.
 const modalContent=document.getElementById('modalContent');
 function addAiDate(){
- const host=document.getElementById('formAiReview'),actions=host?.querySelector('.actions');
+ syncToday();const host=document.getElementById('formAiReview'),actions=host?.querySelector('.actions');
  if(host&&host.children.length&&actions&&!host.querySelector('#formAiLogDate')){
   const wrap=document.createElement('div');wrap.innerHTML=dateField('formAiLogDate','Date to log',diaryDate);
   actions.parentNode.insertBefore(wrap,actions);window.formFoodHistoryUpdateLogLabels(diaryDate);
@@ -77,7 +93,7 @@ function addAiDate(){
 if(modalContent&&typeof MutationObserver==='function')new MutationObserver(addAiDate).observe(modalContent,{childList:true,subtree:true});
 const oldAiSave=window.formAiSaveMeal;
 if(typeof oldAiSave==='function')window.formAiSaveMeal=function(saveQuick){
- const selected=cleanDate(document.getElementById('formAiLogDate')?.value||diaryDate),before=(db.foods||[]).length;
+ syncToday();const selected=cleanDate(document.getElementById('formAiLogDate')?.value||diaryDate),before=(db.foods||[]).length;
  const result=oldAiSave.apply(this,arguments),added=(db.foods||[]).slice(before);
  if(added.length){for(const food of added)food.date=selected;save();if(typeof window.render==='function')window.render()}
  return result;
@@ -85,7 +101,7 @@ if(typeof oldAiSave==='function')window.formAiSaveMeal=function(saveQuick){
 
 const oldNutritionLog=window.formNutritionLog;
 if(typeof oldNutritionLog==='function')window.formNutritionLog=function(){
- const result=oldNutritionLog.apply(this,arguments),root=document.getElementById('modalContent'),actions=root?.querySelector('.actions');
+  syncToday();const result=oldNutritionLog.apply(this,arguments),root=document.getElementById('modalContent'),actions=root?.querySelector('.actions');
  if(window.formV404PendingAiMeal&&actions&&!root.querySelector('#formV404LogDate')){
   const wrap=document.createElement('div');wrap.innerHTML=dateField('formV404LogDate','Date to log',diaryDate);
   actions.parentNode.insertBefore(wrap,actions);window.formFoodHistoryUpdateLogLabels(diaryDate);
@@ -94,9 +110,10 @@ if(typeof oldNutritionLog==='function')window.formNutritionLog=function(){
 };
 const oldLogChoice=window.formV404LogAiMeal;
 if(typeof oldLogChoice==='function')window.formV404LogAiMeal=function(saveQuick){
- const selected=cleanDate(document.getElementById('formV404LogDate')?.value||diaryDate),before=(db.foods||[]).length;
+  syncToday();const selected=cleanDate(document.getElementById('formV404LogDate')?.value||diaryDate),before=(db.foods||[]).length;
  const result=oldLogChoice.apply(this,arguments),added=(db.foods||[]).slice(before);
  if(added.length){for(const food of added)food.date=selected;save();if(typeof window.render==='function')window.render()}
  return result;
 };
 })();
+
