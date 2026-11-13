@@ -1,13 +1,17 @@
 // FORM v2.3 — opt-in, numerical-only intelligent check-in preview.
 (function(){'use strict';
 const endpoint='/api/ai/checkin';
-const allowed=['weight','waist','hips','chest','arm','thigh','bodyFat','sleep','energy','stress','adherence','steps','water'];
+const allowed=['weight','waist','hips','chest','arm','thigh','bodyFat','steps','water','sleepQuality','soreness','appetite','stressRating','energyRating','adherenceRating'];
 const n=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
 const originalProgress=progress;
 progress=function(){return originalProgress()+`<div class="card"><h2>AI check-in trends · 8 weeks (test)</h2><p class="muted tiny">Review trends from recent check-ins. No progress photos, body scans or notes are sent. Cycle day is optional. Gemini suggestions do not change your FORM data.</p><button class="button" onclick="formV23Open()">Prepare private AI review</button></div>`};
 function build(includeCycle){
  const checkins=[...(db.checkins||[])].filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.date||'')).sort((a,b)=>b.date.localeCompare(a.date)).filter(x=>x.date>=new Date(Date.now()-56*86400000).toISOString().slice(0,10)).slice(0,8).reverse().map(x=>{
   const row={date:x.date};for(const k of allowed){const v=n(x[k]);if(v!==null&&v>=0&&v<=100000)row[k]=v}
+  const sleep=n(x.sleep);if(sleep!==null)row.sleepHours=sleep;
+  for(const [from,to] of [['energy','energyLegacy10'],['stress','stressLegacy10'],['adherence','adherenceLegacy10']]){const v=n(x[from]);if(v!==null)row[to]=v}
+  if(typeof x.scanDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.scanDate))row.scanDate=x.scanDate;
+  if(Array.isArray(x.scanMetrics))row.scanMetrics=x.scanMetrics.filter(m=>m&&typeof m.label==='string'&&typeof m.value==='number'&&Number.isFinite(m.value)).slice(0,40).map(m=>({label:m.label.slice(0,80),value:m.value,unit:String(m.unit||'').slice(0,20)}));
   if(includeCycle){const v=n(x.cycle);if(v!==null&&v>=1&&v<=90)row.cycle=v}
   return row;
  });
@@ -20,7 +24,7 @@ function build(includeCycle){
 }
 window.formV23Open=function(){
  if(!(db.checkins||[]).length)return alert('Add a check-in in Progress first.');
- modal(`<h2>AI check-in review · Test</h2><p class="tiny muted">Your saved Coach goal text and the numerical values and dates shown in the preview are shared with Gemini only after you approve. Progress photos, scans, notes, your name and exercise names are excluded.</p>
+ modal(`<h2>AI check-in review · Test</h2><p class="tiny muted">Your saved Coach goal text, dropdown ratings, confirmed body-scan readings, and the numerical values and dates shown in the preview are shared with Gemini only after you approve. Original scan images, progress photos, notes, your name and exercise names are excluded.</p>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v23cycle" style="width:auto" onchange="formV23Preview()">Include menstrual cycle day (sensitive, optional)</label>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v23consent" style="width:auto">I agree to send the previewed numerical information to Gemini for this analysis</label>
  <details open style="margin:12px 0"><summary style="cursor:pointer;padding:10px 0">Review exact information to be shared (expand / collapse)</summary><pre id="v23payload" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;min-height:120px;overflow:auto;background:#14201a;border:1px solid #42594b;border-radius:10px;padding:12px;font-size:12px"></pre></details>

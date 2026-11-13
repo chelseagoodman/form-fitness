@@ -15,7 +15,7 @@ export async function onRequest({request,env,params}){
   if(!env.FORM_AI||!env.FORM_AI_SERVICE_SECRET||env.FORM_AI_SERVICE_SECRET.length<32)return json({error:'AI gateway not configured'},503);
   const path=Array.isArray(params.path)?params.path.join('/'):params.path||'';
   if(request.method==='GET'&&path==='session')return json({signedIn:await valid(request,env.FORM_AI_SERVICE_SECRET)});
-  if(request.method!=='POST'||!['login','logout','analyze','checkin','training','program','coach','workout','plan','meal'].includes(path))return json({error:'Not found'},404);
+  if(request.method!=='POST'||!['login','logout','analyze','checkin','training','program','coach','workout','plan','meal','body-scan'].includes(path))return json({error:'Not found'},404);
   if(!originOK(request))return json({error:'Origin rejected'},403);
   if(!(request.headers.get('Content-Type')||'').startsWith('application/json'))return json({error:'JSON required'},415);
   if(Number(request.headers.get('Content-Length')||0)>3000000)return json({error:'Request too large'},413);
@@ -33,6 +33,10 @@ export async function onRequest({request,env,params}){
   }
   if(!await valid(request,env.FORM_AI_SERVICE_SECRET))return json({error:'Please sign in to FORM AI'},401);
   const ip=request.headers.get('CF-Connecting-IP');
+  if(path==='body-scan'){
+   if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(k=>k!=='image')||typeof data.image!=='string'||data.image.length>2800000||!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(data.image))return json({error:'Choose a JPEG, PNG or WebP scan image under 2 MB after compression'},400);
+   return forward(env,'body-scan',data,ip);
+  }
   if(path==='checkin'){
    if(!data||!Array.isArray(data.checkins)||data.checkins.length>8||!Array.isArray(data.training))return json({error:'Invalid check-in request'},400);
    return forward(env,'checkin',data,ip);

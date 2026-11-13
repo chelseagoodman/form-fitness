@@ -8,9 +8,14 @@ const n=(v,max=100000)=>{if(v===null||v===undefined||v==='')return null;const x=
 const since=(days)=>new Date(Date.now()-days*86400000).toISOString().slice(0,10);
 const cardioWords=/\b(cardio|aerobic|run|running|jog|jogging|sprint|cycle|cycling|bike|biking|row|rowing|swim|swimming|walk|walking|hike|treadmill|elliptical|cross trainer|stair|skipping|jump rope|ski erg|assault bike|spin|zumba|endurance)\b/i;
 function progressData(includeCycle){
- const allowed=['weight','waist','hips','chest','arm','thigh','bodyFat','sleep','energy','stress','adherence','steps','water'];
+ const allowed=['weight','waist','hips','chest','arm','thigh','bodyFat','steps','water','sleepQuality','soreness','appetite','stressRating','energyRating','adherenceRating'];
  const checkins=[...(db.checkins||[])].filter(x=>x&&validDate(x.date)&&x.date>=since(56)).sort((a,b)=>a.date.localeCompare(b.date)).slice(-8).map(x=>{
-  const row={date:x.date};for(const k of allowed){const v=n(x[k]);if(v!==null)row[k]=v}if(includeCycle){const c=n(x.cycle,90);if(c!==null&&c>=1)row.cycle=c}return row;
+  const row={date:x.date};for(const k of allowed){const v=n(x[k]);if(v!==null)row[k]=v}
+  const sleep=n(x.sleep);if(sleep!==null)row.sleepHours=sleep;
+  for(const [from,to] of [['energy','energyLegacy10'],['stress','stressLegacy10'],['adherence','adherenceLegacy10']]){const v=n(x[from]);if(v!==null)row[to]=v}
+  if(typeof x.scanDate==='string'&&validDate(x.scanDate))row.scanDate=x.scanDate;
+  if(Array.isArray(x.scanMetrics))row.scanMetrics=x.scanMetrics.filter(m=>m&&typeof m.label==='string'&&typeof m.value==='number'&&Number.isFinite(m.value)).slice(0,40).map(m=>({label:m.label.slice(0,80),value:m.value,unit:String(m.unit||'').slice(0,20)}));
+  if(includeCycle){const c=n(x.cycle,90);if(c!==null&&c>=1)row.cycle=c}return row;
  });
  const training=[...(db.sessions||[])].filter(x=>x&&validDate(String(x.date||'').slice(0,10))&&String(x.date).slice(0,10)>=since(56)).sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(-8).map(s=>{
   const sets=Array.isArray(s.sets)?s.sets:[],rir=sets.map(x=>n(x.rir,10)).filter(x=>x!==null);
@@ -22,7 +27,12 @@ function progressData(includeCycle){
 function coachPayload(includeCycle,includeNutrition,includeRoutines,includeTraining){
  const g=db.coachGoal||{};
  const checkins=[...(db.checkins||[])].filter(x=>x&&validDate(x.date)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8).reverse().map(x=>{
-  const o={date:x.date};for(const k of ['weight','waist','hips','sleep','energy','stress','recovery']){const v=n(x[k]);if(v!==null)o[k]=v}if(includeCycle){const v=n(x.cycle,90);if(v!==null&&v>=1)o.cycle=v}return o;
+  const o={date:x.date};for(const k of ['weight','waist','hips','chest','arm','thigh','steps','water','bodyFat','sleepQuality','soreness','appetite','stressRating','energyRating','adherenceRating']){const v=n(x[k]);if(v!==null)o[k]=v}
+  const sleep=n(x.sleep);if(sleep!==null)o.sleepHours=sleep;
+  for(const [from,to] of [['energy','energyLegacy10'],['stress','stressLegacy10'],['adherence','adherenceLegacy10']]){const v=n(x[from]);if(v!==null)o[to]=v}
+  if(typeof x.scanDate==='string'&&validDate(x.scanDate))o.scanDate=x.scanDate;
+  if(Array.isArray(x.scanMetrics))o.scanMetrics=x.scanMetrics.filter(m=>m&&typeof m.label==='string'&&typeof m.value==='number'&&Number.isFinite(m.value)).slice(0,40).map(m=>({label:m.label.slice(0,80),value:m.value,unit:String(m.unit||'').slice(0,20)}));
+  if(includeCycle){const v=n(x.cycle,90);if(v!==null&&v>=1)o.cycle=v}return o;
  });
  const sessions=includeTraining?[...(db.sessions||[])].filter(x=>x&&validDate(String(x.date||'').slice(0,10))).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8).reverse().map(x=>({date:String(x.date).slice(0,10),durationMinutes:Math.max(0,Math.min(1000,Number(x.durationMinutes)||Math.round((Number(x.durationSeconds)||0)/60))),sets:(Array.isArray(x.sets)?x.sets:[]).slice(0,40).map(s=>({exercise:String(s.exercise||'').slice(0,90),weight:n(s.weight,1500),reps:n(s.reps,1500),rir:s.rir==null?null:n(s.rir,10)})).filter(s=>s.exercise)})) : [];
  const daily=new Map();
@@ -39,7 +49,7 @@ function previewData(){
 function updatePreview(){const el=document.getElementById('v403preview');if(el)el.textContent=JSON.stringify(previewData(),null,2);const consent=document.getElementById('v403consent');if(consent)consent.checked=false}
 window.formV23Open=function(){
  if(!(db.checkins||[]).length)return alert('Add a check-in in Progress first.');
- modal(`<h2>AI progress review · Test</h2><p class="tiny muted">Review the exact preview before consenting. The goal review receives check-in values and workout summaries. The Coach review can receive daily food totals (no food names or photos), current macro targets and strength routines. Exercise names and set results are included when training context is selected. Photos, scans, notes and your name are excluded. Suggested edits require your approval.</p>
+ modal(`<h2>AI progress review · Test</h2><p class="tiny muted">Review the exact preview before consenting. The goal review receives check-in values, dropdown ratings, confirmed body-scan readings and workout summaries. The Coach review can receive daily food totals (no food names or photos), current macro targets and strength routines. Exercise names and set results are included when training context is selected. Original scan images, progress photos, notes and your name are excluded. Suggested edits require your approval.</p>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v403nutrition" style="width:auto" checked onchange="formV403Preview()">Include food diary daily totals from the last 14 days</label>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v403routines" style="width:auto" checked onchange="formV403Preview()">Include current macro targets and strength routines for suggested changes</label>
  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="v403training" style="width:auto" checked onchange="formV403Preview()">Include recent workout performance</label>
