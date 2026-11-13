@@ -110,6 +110,10 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   headers.set('X-Content-Type-Options','nosniff');
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
  }
+ if(path==='/api/session'){
+  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+  return authenticated?json({signedIn:true,expiresAt:record.exp}):json({signedIn:false},401);
+ }
  if(!authenticated){
   if(path.startsWith('/api/'))return json({error:'Sign in to FORM'},401);
   return new Response(null,{status:303,headers:{Location:'/form-login','Cache-Control':'no-store'}});
@@ -132,7 +136,9 @@ if(!sameOrigin)return json({error:'Origin rejected'},403);
   const p=b64(JSON.stringify({v:1,exp:Date.now()+10*60*1000}));
   const signed=p+'.'+await sign(env.FORM_AI_SERVICE_SECRET,p);
   const h=new Headers(request.headers);
-  h.set('Cookie',(request.headers.get('Cookie')||'')+'; form_ai_test_session='+signed);
+  const cookies=(request.headers.get('Cookie')||'').split(';').map(x=>x.trim()).filter(Boolean).filter(x=>!x.startsWith('form_ai_test_session='));
+  cookies.push('form_ai_test_session='+signed);
+  h.set('Cookie',cookies.join('; '));
   return next(new Request(request,{headers:h}));
  }
  const response=await next();
