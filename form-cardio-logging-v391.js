@@ -95,6 +95,8 @@ function decorateStrengthCards(){
   if(heading.textContent.includes(' + '))continue;
   card.dataset.v391Cardio='1';
   const labels=heading.querySelectorAll('.tiny.muted');
+  const best=window.formBestExercisePerformance?.(title,'cardio');
+  if(best&&!heading.querySelector('.form-best-performance')){const bestLine=document.createElement('span');bestLine.className='tiny muted form-best-performance';bestLine.textContent=best;(heading.querySelector('span')||heading).append(bestLine)}
   if(labels[0])labels[0].textContent='CARDIO';
   if(labels[1])labels[1].textContent=indices.length+' interval'+(indices.length===1?'':'s')+' · Log duration and distance';
   card.querySelectorAll('.workout-set-head,.workout-set-grid:not(.workout-set-head),.form-set-rir').forEach(el=>el.style.display='none');

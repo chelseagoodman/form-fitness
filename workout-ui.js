@@ -28,6 +28,26 @@ function lastSet(name,n){
  for(const sess of sessions){const found=sess.sets.find(x=>x.exercise===name&&x.set===n);if(found)return `${found.weight}kg × ${found.reps}`}
  return '—';
 }
+function bestPerformance(name,requestedType){
+ const rows=(db.sessions||[]).flatMap(session=>(Array.isArray(session.sets)?session.sets:[]).filter(set=>String(set.exercise||'').trim().toLowerCase()===String(name||'').trim().toLowerCase()).map(set=>({set,date:String(session.date||'').slice(0,10)})));
+ let type=requestedType;
+ if(!type){const routine=(db.routines||[]).find(r=>r.id===sessionDraft?.routineId),entry=routine?.exercises?.find(e=>String(e.name||'').trim().toLowerCase()===String(name||'').trim().toLowerCase());type=entry?.activityType||rows.find(x=>x.set.activityType)?.set.activityType;}
+ if(!type){try{const meta=JSON.parse(localStorage.getItem('form-v21-exercise-meta')||'{}');type=meta[String(name||'').trim().toLowerCase()]?.type}catch{}}
+ if(!type)type=/\b(cardio|aerobic|run|running|jog|jogging|sprint|cycle|cycling|bike|biking|row|rowing|swim|swimming|walk|walking|hike|treadmill|elliptical|cross trainer|stair|skipping|jump rope|ski erg|assault bike|spin|zumba|endurance)\b/i.test(String(name||''))?'cardio':'strength';
+ const dateLabel=date=>{if(!date)return '';const d=new Date(date+'T12:00:00');return Number.isNaN(d.valueOf())?date:d.toLocaleDateString('en-AU',{day:'numeric',month:'short'})};
+ if(type==='cardio'){
+  const usable=rows.filter(({set})=>Number(set.distanceKm)>0||Number(set.durationMinutes)>0);
+  usable.sort((a,b)=>(Number(b.set.distanceKm)||0)-(Number(a.set.distanceKm)||0)||(Number(b.set.durationMinutes)||0)-(Number(a.set.durationMinutes)||0));
+  if(!usable.length)return '';
+  const {set,date}=usable[0],bits=[];if(Number(set.distanceKm)>0)bits.push(Number(set.distanceKm)+' km');if(Number(set.durationMinutes)>0)bits.push(Number(set.durationMinutes)+' min');
+  return 'Best interval: '+bits.join(' · ')+(date?' · '+dateLabel(date):'');
+ }
+ const usable=rows.map(x=>({...x,weight:Number(x.set.weight)||0,reps:Number(x.set.reps)||0})).filter(x=>x.weight>0&&x.reps>0);
+ usable.sort((a,b)=>(b.weight*(1+b.reps/30))-(a.weight*(1+a.reps/30))||b.weight-a.weight||b.reps-a.reps);
+ if(!usable.length)return '';
+ const x=usable[0];return 'Best so far: '+x.weight+' kg × '+x.reps+(x.date?' · '+dateLabel(x.date):'');
+}
+window.formBestExercisePerformance=bestPerformance;
 // FORM 1.9: Session-local superset pairings, stored with draft and completed session.
 function pairOf(name){return sessionDraft?.supersets?.[name]||null}
 function nextPairLabel(){const used=new Set(Object.values(sessionDraft.supersets||{}));for(const x of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')if(!used.has(x))return x;return 'Z'}
@@ -124,15 +144,15 @@ function renderWorkout(){
  <div class="progress" style="margin-bottom:16px"><div style="width:${total?100*completed/total:0}%"></div></div>
  ${blocks.map((block,bi)=>{
   if(block.members.length===1){
-   const g=block.members[0],i=g.index;
-   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">STRAIGHT SETS</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>${exerciseActions(g,i,groups)}${openCards.has(bi)?exerciseNote(g)+setHeader()+g.sets.map(s=>setRow(s,g.name)).join('')+'<p class="tiny muted">Rest as needed between sets.</p>':''}</section>`;
+   const g=block.members[0],i=g.index,best=bestPerformance(g.name,g.sets.some(s=>s.activityType==='cardio')?'cardio':null);
+   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">STRAIGHT SETS</span><strong>${i+1}. ${safeText(g.name)}</strong><span class="tiny muted">${g.sets.length} sets · Target ${g.reps} reps</span>${best?`<span class="tiny muted form-best-performance">${safeText(best)}</span>`:''}</span><span>${openCards.has(bi)?'−':'+'}</span></button>${exerciseActions(g,i,groups)}${openCards.has(bi)?exerciseNote(g)+setHeader()+g.sets.map(s=>setRow(s,g.name)).join('')+'<p class="tiny muted">Rest as needed between sets.</p>':''}</section>`;
   }
   const rounds=Math.max(...block.members.map(g=>g.sets.length));
   return `<section class="workout-card"><button type="button" class="workout-card-heading" onclick="formToggleCard(${bi})" aria-expanded="${openCards.has(bi)}"><span><span class="tiny muted">SUPERSET ${safeText(block.label)}</span><strong>${block.members.map(g=>safeText(g.name)).join(' + ')}</strong><span class="tiny muted">${rounds} alternating rounds · ${block.members.length} exercises</span></span><span>${openCards.has(bi)?'−':'+'}</span></button>
   ${openCards.has(bi)?block.members.map(exerciseNote).join('')+Array.from({length:rounds},(_,ri)=>{
    const present=block.members.filter(g=>g.sets[ri]);
    const finished=present.every(g=>done[indexFor(g.sets[ri])]);
-   return `<div class="form-round"><div class="row" style="margin:10px 0"><b style="color:#a8e6bc">Round ${ri+1}</b><span class="tiny muted">${finished?'Complete':'Alternate exercises in order'}</span></div>${present.map((g,gi)=>`<div class="form-round-exercise"><div class="row"><strong>${safeText(block.label)}${gi+1} · ${safeText(g.name)}</strong><span class="tiny muted">Set ${g.sets[ri].set}</span></div>${setHeader()}${setRow(g.sets[ri],g.name)}</div>`).join('')}<p class="tiny muted">${ri<rounds-1?'Rest after this round, then repeat.':'Superset finished after this round.'}</p></div>`;
+   return `<div class="form-round"><div class="row" style="margin:10px 0"><b style="color:#a8e6bc">Round ${ri+1}</b><span class="tiny muted">${finished?'Complete':'Alternate exercises in order'}</span></div>${present.map((g,gi)=>`<div class="form-round-exercise"><div class="row"><strong>${safeText(block.label)}${gi+1} · ${safeText(g.name)}</strong><span class="tiny muted">Set ${g.sets[ri].set}</span></div>${bestPerformance(g.name,g.sets.some(s=>s.activityType==='cardio')?'cardio':null)?`<p class="tiny muted form-best-performance">${safeText(bestPerformance(g.name,g.sets.some(s=>s.activityType==='cardio')?'cardio':null))}</p>`:''}${setHeader()}${setRow(g.sets[ri],g.name)}</div>`).join('')}<p class="tiny muted">${ri<rounds-1?'Rest after this round, then repeat.':'Superset finished after this round.'}</p></div>`;
   }).join(''):'<p class="tiny muted">Expand to log each alternating round.</p>'}
   ${block.members.map(g=>`<div class="form-superset-actions"><span class="tiny muted">${safeText(g.name)}</span>${exerciseActions(g,g.index,groups)}</div>`).join('')}</section>`;
  }).join('')}

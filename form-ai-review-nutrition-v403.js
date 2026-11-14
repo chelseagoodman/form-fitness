@@ -24,6 +24,8 @@ function progressData(includeCycle){
  });
  return {checkins,training,goal:String(db.coachGoal?.goal||db.profile?.goal||'not specified').slice(0,500)};
 }
+const FOCUS_OPTIONS=['progression','tempo','hypertrophy','amrap','deload'];
+function currentTrainingFocus(){const active=[...(db.coachUnifiedPlans||[]),...(db.formManualPrograms||[])].filter(p=>p?.status==='active'&&FOCUS_OPTIONS.includes(p.trainingFocus)).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));if(active.length)return active[0].trainingFocus;try{const p=JSON.parse(localStorage.getItem('form-v21-preferences')||'{}');return FOCUS_OPTIONS.includes(p.block)?p.block:'progression'}catch{return 'progression'}}
 function coachPayload(includeCycle,includeNutrition,includeRoutines,includeTraining){
  const g=db.coachGoal||{};
  const checkins=[...(db.checkins||[])].filter(x=>x&&validDate(x.date)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8).reverse().map(x=>{
@@ -34,13 +36,13 @@ function coachPayload(includeCycle,includeNutrition,includeRoutines,includeTrain
   if(Array.isArray(x.scanMetrics))o.scanMetrics=x.scanMetrics.filter(m=>m&&typeof m.label==='string'&&typeof m.value==='number'&&Number.isFinite(m.value)).slice(0,40).map(m=>({label:m.label.slice(0,80),value:m.value,unit:String(m.unit||'').slice(0,20)}));
   if(includeCycle){const v=n(x.cycle,90);if(v!==null&&v>=1)o.cycle=v}return o;
  });
- const sessions=includeTraining?[...(db.sessions||[])].filter(x=>x&&validDate(String(x.date||'').slice(0,10))).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8).reverse().map(x=>({date:String(x.date).slice(0,10),durationMinutes:Math.max(0,Math.min(1000,Number(x.durationMinutes)||Math.round((Number(x.durationSeconds)||0)/60))),sets:(Array.isArray(x.sets)?x.sets:[]).slice(0,40).map(s=>({exercise:String(s.exercise||'').slice(0,90),weight:n(s.weight,1500),reps:n(s.reps,1500),rir:s.rir==null?null:n(s.rir,10)})).filter(s=>s.exercise)})) : [];
+ const sessions=includeTraining?[...(db.sessions||[])].filter(x=>x&&validDate(String(x.date||'').slice(0,10))).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8).reverse().map(x=>({date:String(x.date).slice(0,10),durationMinutes:Math.max(0,Math.min(1000,Number(x.durationMinutes)||Math.round((Number(x.durationSeconds)||0)/60))),sets:(Array.isArray(x.sets)?x.sets:[]).slice(0,40).map(s=>({exercise:String(s.exercise||'').slice(0,90),weight:n(s.weight,1500),reps:n(s.reps,1500),rir:s.rir==null?null:n(s.rir,10),activityType:s.activityType==='cardio'?'cardio':(cardioWords.test(String(s.exercise||''))?'cardio':'strength'),durationMinutes:n(s.durationMinutes,480),distanceKm:n(s.distanceKm,1000),effortRating:n(s.effortRating,10)})).filter(s=>s.exercise)})) : [];
  const daily=new Map();
  if(includeNutrition)for(const f of db.foods||[]){if(!f||!validDate(f.date)||f.date<since(14))continue;const day=daily.get(f.date)||{date:f.date,calories:0,protein:0,carbs:0,fat:0,entries:0};for(const k of ['calories','protein','carbs','fat'])day[k]+=n(f[k])||0;day.entries++;daily.set(f.date,day)}
  const nutrition=[...daily.values()].sort((a,b)=>a.date.localeCompare(b.date)).slice(-14).map(x=>Object.fromEntries(Object.entries(x).map(([k,v])=>[k,typeof v==='number'?Math.round(v*10)/10:v])));
  const routines=includeRoutines?(db.routines||[]).slice(0,20).map(r=>({id:String(r.id||'').slice(0,80),name:String(r.name||'').slice(0,100),exercises:(r.exercises||[]).slice(0,30).map((e,index)=>({e,index})).filter(({e})=>e.activityType!=='cardio'&&!(!e.activityType&&cardioWords.test(e.name||''))).map(({e,index})=>({index,name:String(e.name||'').slice(0,100),sets:Math.max(1,Math.min(12,Math.round(Number(e.sets)||3))),reps:Math.max(1,Math.min(100,Math.round(Number(e.reps)||10))),targetRir:Number.isInteger(e.targetRir)?Math.max(0,Math.min(10,e.targetRir)):null}))})) : [];
- const plan={macro:Object.fromEntries(['calories','protein','carbs','fat'].map(k=>[k,Math.max(0,Math.min(10000,Number(db.macro?.[k])||0))])),routines};
- return {mode:'review',message:'Review my goal, check-ins, food diary totals, recent training and current plan. Suggest specific macro or strength routine changes only when supported by the data. Explain uncertainty and say when keeping the current plan is best. Never apply changes automatically.',context:{goal:String(g.goal||db.profile?.goal||'').slice(0,1200),deadline:String(g.deadline||'').slice(0,1200),priority:String(g.priority||'').slice(0,1200),roster:String(g.roster||'').slice(0,1200),equipmentCamp:String(g.equipmentCamp||'').slice(0,1200),equipmentHome:String(g.equipmentHome||'').slice(0,1200),trainingDays:Math.max(1,Math.min(7,Math.round(Number(g.trainingDays)||5))),checkins,sessions,nutrition,plan},history:[]};
+ const plan={trainingFocus:currentTrainingFocus(),macro:Object.fromEntries(['calories','protein','carbs','fat'].map(k=>[k,Math.max(0,Math.min(10000,Number(db.macro?.[k])||0))])),routines};
+ return {mode:'review',message:'Review my goal, check-ins, food diary totals, recent training and current plan. Suggest macro or training changes only when supported by the data, including strength or cardio progression. Explain uncertainty and say when keeping the current plan is best. Never apply changes automatically.',context:{goal:String(g.goal||db.profile?.goal||'').slice(0,1200),deadline:String(g.deadline||'').slice(0,1200),priority:String(g.priority||'').slice(0,1200),roster:String(g.roster||'').slice(0,1200),equipmentCamp:String(g.equipmentCamp||'').slice(0,1200),equipmentHome:String(g.equipmentHome||'').slice(0,1200),trainingDays:Math.max(1,Math.min(7,Math.round(Number(g.trainingDays)||5))),trainingFocus:currentTrainingFocus(),checkins,sessions,nutrition,plan},history:[]};
 }
 function previewData(){
  const cycle=!!document.getElementById('v403cycle')?.checked,nutrition=!!document.getElementById('v403nutrition')?.checked,routines=!!document.getElementById('v403routines')?.checked,training=!!document.getElementById('v403training')?.checked;
@@ -95,3 +97,4 @@ window.formV403Analyse=async function(){
  button.disabled=false;
 };
 })();
+

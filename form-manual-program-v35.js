@@ -4,6 +4,8 @@
 const cp=x=>JSON.parse(JSON.stringify(x));
 const E=x=>esc(String(x??''));
 let draft=null, activeIndex=0;
+const FOCUS_OPTIONS=[['progression','Progressive overload'],['tempo','Controlled eccentrics'],['hypertrophy','Hypertrophy'],['amrap','Selected AMRAP sets'],['deload','Deload / recovery']];
+function defaultFocus(){try{const p=JSON.parse(localStorage.getItem('form-v21-preferences')||'{}');return FOCUS_OPTIONS.some(x=>x[0]===p.block)?p.block:'progression'}catch{return 'progression'}}
 const routines=()=>Array.isArray(db.routines)?db.routines:[];
 const programs=()=>Array.isArray(db.formManualPrograms)?db.formManualPrograms:[];
 const universal=()=>Array.isArray(db.universalWorkouts)?db.universalWorkouts:[];
@@ -33,6 +35,10 @@ function draw(){const root=document.getElementById('manual-v35');if(!root||!draf
  const intro=document.createElement('p');intro.className='tiny muted';intro.textContent='Manual only — no information is sent to Gemini. Create Workout A, B, C and as many more as you need. Completed sessions are never overwritten.';root.append(intro);
  root.append(field('Program name',draft.name,v=>draft.name=v.slice(0,90)));
  root.lastChild.querySelector('input').id='mpName';
+ const focusLabel=document.createElement('label');focusLabel.textContent='Training block focus';const focusSelect=document.createElement('select');focusSelect.id='mpFocus';
+ for(const [value,label] of FOCUS_OPTIONS){const option=document.createElement('option');option.value=value;option.textContent=label;focusSelect.append(option)}
+ focusSelect.value=draft.trainingFocus||defaultFocus();focusSelect.onchange=()=>{draft.trainingFocus=focusSelect.value;if(typeof window.formV21Set==='function')window.formV21Set('block',focusSelect.value)};
+ focusLabel.append(focusSelect);root.append(focusLabel);
  const nav=document.createElement('div');nav.className='actions';draft.workouts.forEach((w,i)=>nav.append(btn(w.name||'Workout '+alpha(i),()=>{saveDraftForm();activeIndex=i;draw()},i!==activeIndex)));
  nav.append(btn('+ Add workout',()=>{saveDraftForm();draft.workouts.push(newWorkout(draft.workouts.length));activeIndex=draft.workouts.length-1;draw()}));root.append(nav);
  const w=draft.workouts[activeIndex];const block=document.createElement('div');block.className='item';root.append(block);
@@ -65,9 +71,9 @@ function draw(){const root=document.getElementById('manual-v35');if(!root||!draf
  const foot=document.createElement('div');foot.className='card';const note=document.createElement('p');note.className='tiny muted';note.textContent='When finished, review the whole program and choose Replace Current Plan, Keep Both or Save as Draft. Your previous plan is archived rather than deleted.';foot.append(note);
  foot.append(btn('Review & save complete program',()=>{saveDraftForm();review()}));root.append(foot);
 }
-window.formManualProgramOpen=function(){draft={name:'My Training Program',workouts:[newWorkout(0)]};activeIndex=0;modal('<div id="manual-v35"></div>');draw()};
+window.formManualProgramOpen=function(){draft={name:'My Training Program',trainingFocus:defaultFocus(),workouts:[newWorkout(0)]};activeIndex=0;modal('<div id="manual-v35"></div>');draw()};
 function validate(){if(!draft||!draft.name.trim()||draft.name.length>90||!draft.workouts.length||draft.workouts.length>30)return false;return draft.workouts.every(w=>w.name.trim()&&w.name.length<=90&&w.exercises.length>0&&w.exercises.length<=40&&w.exercises.every(x=>x.name.trim()&&x.name.length<=90&&Number.isInteger(x.sets)&&x.sets>=1&&x.sets<=12&&Number.isInteger(x.reps)&&x.reps>=1&&x.reps<=100&&Number.isInteger(x.rir)&&x.rir>=0&&x.rir<=10))}
-function review(){if(!validate())return alert('Give the program and each workout a name, and add at least one valid exercise to every workout.');const root=document.getElementById('manual-v35');root.replaceChildren();const h=document.createElement('h2');h.textContent='Review your program';root.append(h);const p=document.createElement('p');p.textContent=draft.name+' — '+draft.workouts.length+' workout(s)';root.append(p);for(const w of draft.workouts){const item=document.createElement('div');item.className='item';const name=document.createElement('b');name.textContent=w.name;item.append(name);const details=document.createElement('p');details.className='tiny muted';details.textContent=w.exercises.map(x=>x.name+' ('+(v393ProgramType(x.name,x.activityType)==='cardio'?x.sets+' intervals':x.sets+' × '+x.reps)+')').join(' · ');item.append(details);root.append(item)}
+function review(){if(!validate())return alert('Give the program and each workout a name, and add at least one valid exercise to every workout.');const root=document.getElementById('manual-v35');root.replaceChildren();const h=document.createElement('h2');h.textContent='Review your program';root.append(h);const p=document.createElement('p');p.textContent=draft.name+' — '+draft.workouts.length+' workout(s) · Focus: '+(FOCUS_OPTIONS.find(x=>x[0]===draft.trainingFocus)?.[1]||'Progressive overload');root.append(p);for(const w of draft.workouts){const item=document.createElement('div');item.className='item';const name=document.createElement('b');name.textContent=w.name;item.append(name);const details=document.createElement('p');details.className='tiny muted';details.textContent=w.exercises.map(x=>x.name+' ('+(v393ProgramType(x.name,x.activityType)==='cardio'?x.sets+' intervals':x.sets+' × '+x.reps)+')').join(' · ');item.append(details);root.append(item)}
  const label=document.createElement('label');label.textContent='How would you like to save?';const sel=document.createElement('select');sel.id='mpMode';for(const [value,text] of [['replace','Replace Current Plan (archive old)'],['keep','Keep Both'],['draft','Save as Draft']]){const opt=document.createElement('option');opt.value=value;opt.textContent=text;sel.append(opt)}label.append(sel);root.append(label);
  const actions=document.createElement('div');actions.className='actions';actions.append(btn('Back to editing',draw,true),btn('Confirm & save program',()=>commit(sel.value)));root.append(actions);
 }
@@ -81,9 +87,9 @@ function commit(mode){if(!['replace','keep','draft'].includes(mode)||!validate()
   for(const p of programs())if(p.status==='active')p.status='archived';
  }
  const status=mode==='draft'?'draft':'active';
- const created=draft.workouts.map((w,i)=>({id:uid(),name:w.name,exercises:cp(w.exercises),formPlanStatus:status,formPlanId:id,formManualProgramId:id,formManualDay:i+1}));
+ const created=draft.workouts.map((w,i)=>({id:uid(),name:w.name,exercises:cp(w.exercises),formPlanStatus:status,formPlanId:id,formManualProgramId:id,formManualDay:i+1,trainingFocus:draft.trainingFocus||defaultFocus()}));
  db.routines=[...routines(),...created];
- db.formManualPrograms=[...programs(),{id,name:draft.name,createdAt:time,status,routineIds:created.map(r=>r.id)}];
+ db.formManualPrograms=[...programs(),{id,name:draft.name,createdAt:time,status,trainingFocus:draft.trainingFocus||defaultFocus(),routineIds:created.map(r=>r.id)}];
  db.coachPlanHistory=[...snapshot.coachPlanHistory,{id:'manual-'+id,date:time,kind:'manual-program',description:'Manual program '+mode,previous:{routines:snapshot.routines,universalWorkouts:snapshot.universalWorkouts,coachUnifiedPlans:snapshot.coachUnifiedPlans,formManualPrograms:snapshot.formManualPrograms}}].slice(-20);
  if(save()!==true)throw Error('Unable to save');close();render();alert('Saved '+created.length+' workouts. '+(mode==='draft'?'Draft stays out of Train.':'Find active workouts in Train.'));
  }catch(e){for(const key of ['routines','universalWorkouts','coachUnifiedPlans','formManualPrograms','coachPlanHistory'])db[key]=snapshot[key];alert('Program was not saved. Your previous plan was restored. Export a backup and check storage.')}
@@ -99,3 +105,4 @@ window.formManualProgramManage=function(){const all=programs();modal('<h2>Manual
 const priorTrain=train;
 train=function(){return priorTrain()+`<div class="card"><h2>Build Your Own Program</h2><p class="tiny muted">Create multiple workouts without AI. Select exercises from your library, edit sets, reps, RIR and supersets, then save as one program.</p><div class="actions"><button class="button" onclick="formManualProgramOpen()">Build my own program</button><button class="button secondary" onclick="formManualProgramManage()">Manage manual programs</button></div></div>`};
 })();
+

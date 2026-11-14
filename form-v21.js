@@ -16,10 +16,8 @@ function settingsPanel(){return `<div class="card"><h2>Training preferences</h2>
 
 ${field('Automatically highlight next set','autoNext',[['true','On'],['false','Off']])}
 ${field('Default reps in reserve (RIR)','rir',[[0,'0'],[1,'1'],[2,'2'],[3,'3'],[4,'4']])}
-${field('Training block focus','block',[['progression','Progressive overload'],['tempo','Controlled eccentrics'],['hypertrophy','Hypertrophy'],['amrap','Selected AMRAP sets'],['deload','Deload / recovery']])}
-${field('Block duration','blockWeeks',[[4,'4 weeks'],[6,'6 weeks'],[8,'8 weeks']])}
 ${field('Check-in reminder day','checkinDay',[['none','Off'],['0','Sunday'],['1','Monday'],['2','Tuesday'],['3','Wednesday'],['4','Thursday'],['5','Friday'],['6','Saturday']])}
-<p class="tiny muted">Reminders appear inside FORM when opened, not as iPhone push notifications. Training blocks are guidance; your routines are not changed automatically.</p></div>`}
+<p class="tiny muted">Reminders appear inside FORM when opened, not as iPhone push notifications.</p></div>`}
 window.formV21Set=function(k,v){if(!(k in defaults))return;prefs[k]=['autoRest','autoNext'].includes(k)?v==='true':['compoundRest','accessoryRest','supersetRest','rir','blockWeeks'].includes(k)?Number(v):v;persist();};
 // Attach to Settings after the existing theme/data management sections.
 const oldRender=render;
@@ -37,7 +35,7 @@ function getDuration(){if(!sessionDraft)return 0;sessionDraft.startedAt=sessionD
 function durationText(){const n=getDuration();return `${Math.floor(n/3600)}h ${String(Math.floor(n%3600/60)).padStart(2,'0')}m`}
 function addWorkoutExtras(){const host=$id('modalContent');if(!host||!sessionDraft)return;
  let header=$id('v21-session-header');if(!header){header=document.createElement('div');header.id='v21-session-header';header.className='notice';host.prepend(header)}
- header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b></div><div class="tiny muted">Block: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks. RIR records effort; enter it after each set.</div>`;
+ header.innerHTML=`<div class="row"><b>Workout duration: <span id="v21-duration">${durationText()}</span></b></div><div class="tiny muted">RIR records effort; enter it after each set.</div>`;
  // RIR is rendered by workout-ui.js within each set row.
  // Do not inject another RIR control here: that caused duplicates and disappearing fields.
  const groups=exerciseNames();for(const name of groups){const headings=[...host.querySelectorAll('.workout-card strong')].filter(el=>el.textContent.trim()===name);if(!headings.length)continue;const heading=headings[0];if(heading.parentElement.querySelector('.v21-note'))continue;const note=document.createElement('div');note.className='v21-note tiny muted';note.style.marginTop='5px';note.textContent=meta[name]?.note?`Note: ${meta[name].note}`:'';heading.parentElement.appendChild(note)}
@@ -52,8 +50,6 @@ window.formDraftDone=function(i,v){oldDone(i,v);return; if(!v||!prefs.autoRest)r
 setInterval(()=>{const el=document.getElementById('v21-duration');if(el&&sessionDraft)el.textContent=durationText()},1000);
 const oldFinish=finishSession;finishSession=function(){const before=db.sessions.length,seconds=sessionDraft?getDuration():0;oldFinish();if(db.sessions.length>before){db.sessions[db.sessions.length-1].durationSeconds=seconds;save();}};
 const oldStart=startSession;startSession=function(id){oldStart(id);if(sessionDraft){sessionDraft.startedAt=sessionDraft.startedAt||Date.now();persistDraft();addWorkoutExtras()}};
-// Supplement Coach with non-AI deload guidance based on recent logged performance.
-const oldCoach=coach;coach=function(){let result=oldCoach();const recent=[...(db.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);let note='Log several workouts and RIR values to receive more useful deload guidance.';if(recent.length>=4){const all=recent.flatMap(s=>s.sets||[]);const high=all.filter(s=>s.rir!==null&&s.rir!==undefined&&Number(s.rir)<=1).length;const rated=all.filter(s=>s.rir!==null&&s.rir!==undefined).length;if(rated>=8&&high/rated>=.65)note='Many recent sets were logged at 0–1 RIR. Consider reviewing recovery and whether a lower-volume week is appropriate.';else note='Review performance, fatigue and check-ins before planning a deload; no automatic change has been made.'}return result+`<div class="card"><h2>Training block & deload review</h2><p class="muted tiny">Current focus: ${safe(prefs.block)} · ${prefs.blockWeeks} weeks</p><p>${safe(note)}</p></div>`};
 // Exercise categories and persistent notes, saved separately from the existing library.
 window.formV21ExerciseLibrary=function(){const names=[...new Set([...(db.routines||[]).flatMap(r=>(r.exercises||[]).map(e=>e.name)),...(db.exerciseLibrary||[]).map(e=>Array.isArray(e)?e[0]:e.name)].filter(Boolean))].sort();const rows=names.map(n=>`<option value="${safe(n)}">${safe(n)}</option>`).join('');modal(`<h2>Exercise notes & categories</h2><label>Exercise</label><select id="v21-exercise" onchange="formV21LoadExercise()">${rows}</select><label>Category / muscle group</label><input id="v21-category" placeholder="e.g. Chest, Back, Glutes"><label>Equipment</label><input id="v21-equipment" placeholder="e.g. Dumbbells, Machine"><label>Technique / machine notes</label><textarea id="v21-note" rows="3" placeholder="Seat position, grip, cues..."></textarea><div class="actions"><button class="button" onclick="formV21SaveExercise()">Save notes</button></div>`);window.formV21LoadExercise()};
 window.formV21LoadExercise=function(){const n=$id('v21-exercise')?.value||'';const x=meta[n]||{};if($id('v21-category'))$id('v21-category').value=x.category||'';if($id('v21-equipment'))$id('v21-equipment').value=x.equipment||'';if($id('v21-note'))$id('v21-note').value=x.note||''};
@@ -66,4 +62,5 @@ window.formV21ImportPreferences=function(){modal(`<h2>Restore workout preference
 window.formV21RestorePreferences=async function(){const f=$id('v21-prefs-file')?.files?.[0];if(!f)return alert('Choose a file.');try{const x=JSON.parse(await f.text());if(x.app!=='FORM'||x.type!=='v21-preferences'||!x.prefs||!x.meta||Array.isArray(x.meta))throw Error('Invalid preferences backup');if(!confirm('Replace current workout preferences and exercise notes?'))return;prefs={...defaults,...x.prefs};meta=x.meta;persist();close();render()}catch(e){alert('Could not restore preferences: '+e.message)}};
 const priorRender=render;render=function(){priorRender();if(page==='settings'){const wrap=$id('v21-settings');if(wrap&&!$id('v21-export')){const panel=document.createElement('div');panel.id='v21-export';panel.className='actions';panel.innerHTML='<button class="button secondary small" onclick="formV21ExportPreferences()">Export workout preferences & exercise notes</button><button class="button secondary small" onclick="formV21ImportPreferences()">Restore workout preferences</button>';wrap.appendChild(panel)}}};
 })();
+
 
